@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Expo
+.expo/
+.expo-shared/
+
+# Android / iOS
+android/
+ios/
+
+# IDE
+.vscode/
+
+# Env
+.env
+
+# OS
+Thumbs.db
+.DS_Store
