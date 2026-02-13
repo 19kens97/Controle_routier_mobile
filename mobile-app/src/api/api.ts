@@ -1,20 +1,17 @@
-import axios, { AxiosRequestConfig } from "axios";
+// src/api/api.ts
+import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 
 const api = axios.create({
-  baseURL: "http://192.168.0.110:8000/api/users/",
+  baseURL: "http://192.168.0.110:8000/api/", // <-- root
   timeout: 10000,
-  headers: {
-    "Content-Type": "application/json",
-  },
+  headers: { "Content-Type": "application/json" },
 });
 
 api.interceptors.request.use(async (config) => {
   const token = await SecureStore.getItemAsync("access");
   config.headers = config.headers || {};
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 

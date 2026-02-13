@@ -1,20 +1,21 @@
-import { View, Text, Pressable } from "react-native";
-import { clearTokens } from "@/src/utils/auth";
+import { useEffect } from "react";
+import { View, ActivityIndicator } from "react-native";
 import { router } from "expo-router";
+import { logout } from "../../src/utils/auth";
 
-export default function Profile() {
-  const handleLogout = async () => {
-    await clearTokens();
-    router.replace("/login");
-  };
+export default function LogoutScreen() {
+  useEffect(() => {
+    async function handle() {
+      await logout();
+      router.replace("/login");
+    }
+
+    handle();
+  }, []);
 
   return (
-    <View>
-      <Text>Profil utilisateur</Text>
-
-      <Pressable onPress={handleLogout}>
-        <Text style={{ color: "red" }}>Se déconnecter</Text>
-      </Pressable>
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <ActivityIndicator size="large" />
     </View>
   );
 }
