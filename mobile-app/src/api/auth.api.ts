@@ -1,7 +1,7 @@
 // src/api/auth.api.ts
 import api from "./api";
 
-export const FORGOT_PASSWORD_PATH = "users/password-reset/"; 
+export const FORGOT_PASSWORD_PATH = "users/password/reset/"; 
 
 export async function requestPasswordReset(email: string) {
   const res = await api.post(FORGOT_PASSWORD_PATH, { email });
