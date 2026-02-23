@@ -54,7 +54,7 @@ export default function Login() {
       await saveTokens(access, refresh);
 
       // ✅ recommandé si tu as app/index.tsx (Redirect gate)
-      router.replace("/");
+      router.replace("/(tabs)");
       // sinon: router.replace("/(tabs)");
     } catch (error: any) {
       const apiMessage =

@@ -1,10 +1,12 @@
-import React, { useMemo } from "react";
-import { View, Text, StyleSheet, Pressable, FlatList } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import Screen from "../../components/screen";
 import { theme } from "../../constants/theme";
+import { getUserProfile, UserProfile } from "../../src/api/users.api";
+import * as SecureStore from "expo-secure-store";
 
 type AlertItem = {
   id: string;
@@ -21,7 +23,39 @@ type ActivityItem = {
 };
 
 export default function HomeDashboard() {
-  const user = useMemo(() => ({ name: "Agent", role: "AGENT_TERRAIN" as const }), []);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+
+  useEffect(() => {
+    // console.log("HomeDashboard mounted -> fetching profile...");
+    let mounted = true;
+    (async () => {
+      const t = await SecureStore.getItemAsync("access_token");
+      try {
+        const res = await getUserProfile(); // { message, data }
+        if (mounted) setProfile(res?.data ?? null);
+      } catch (e) {
+        // Si 401: token manquant/expiré -> tu peux rediriger login
+        // router.replace("/login");
+        if (mounted) setProfile(null);
+      } finally {
+        if (mounted) setLoadingProfile(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const userName = useMemo(() => {
+    if (!profile) return "Agent";
+    const first = (profile.first_name || "").trim();
+    const last = (profile.last_name || "").trim();
+    const full = `${first} ${last}`.trim();
+    return full || profile.username || "Agent";
+  }, [profile]);
+
+  const userRole = profile?.role || "AGENT_TERRAIN";
   const sync = useMemo(() => ({ online: true, pendingCount: 2 }), []);
   const stats = useMemo(() => ({ controles: 7, verbalisations: 3 }), []);
 
@@ -40,25 +74,47 @@ export default function HomeDashboard() {
         level: "MEDIUM",
       },
     ],
-    []
+    [],
   );
 
   const activity: ActivityItem[] = useMemo(
     () => [
-      { id: "1", title: "Contrôle • AA-12345", subtitle: "Aujourd’hui • 10:12", status: "SYNCED" },
-      { id: "2", title: "Verbalisation • Excès de vitesse", subtitle: "Aujourd’hui • 09:40", status: "PENDING" },
-      { id: "3", title: "Contrôle • BB-90877", subtitle: "Hier • 18:05", status: "SYNCED" },
-      { id: "4", title: "Contrôle • CC-00112", subtitle: "Hier • 16:22", status: "ERROR" },
+      {
+        id: "1",
+        title: "Contrôle • AA-12345",
+        subtitle: "Aujourd’hui • 10:12",
+        status: "SYNCED",
+      },
+      {
+        id: "2",
+        title: "Verbalisation • Excès de vitesse",
+        subtitle: "Aujourd’hui • 09:40",
+        status: "PENDING",
+      },
+      {
+        id: "3",
+        title: "Contrôle • BB-90877",
+        subtitle: "Hier • 18:05",
+        status: "SYNCED",
+      },
+      {
+        id: "4",
+        title: "Contrôle • CC-00112",
+        subtitle: "Hier • 16:22",
+        status: "ERROR",
+      },
     ],
-    []
+    [],
   );
 
-  const roleLabel =
-    user.role === "AGENT_TERRAIN"
+  const roleLabel = useMemo(() => {
+    const role = profile?.role || "AGENT_TERRAIN";
+    return role === "AGENT_TERRAIN"
       ? "Agent de terrain"
-      : user.role === "AGENT_SAISIE"
+      : role === "AGENT_SAISIE"
       ? "Agent de saisie"
       : "Administrateur";
+  }, [profile]);
 
   return (
     <Screen>
@@ -66,19 +122,23 @@ export default function HomeDashboard() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.hi}>Bonjour, {user.name}</Text>
+            <Text style={styles.hi}>Bonjour, {loadingProfile ? "..." : userName}</Text>
             <Text style={styles.role}>{roleLabel}</Text>
           </View>
 
           <View style={styles.syncBadge}>
             <Ionicons
-              name={sync.online ? "cloud-done-outline" : "cloud-offline-outline"}
+              name={
+                sync.online ? "cloud-done-outline" : "cloud-offline-outline"
+              }
               size={16}
               color={theme.colors.text}
             />
             <Text style={styles.syncText}>
               {sync.online ? "En ligne" : "Hors ligne"}
-              {sync.pendingCount > 0 ? ` • ${sync.pendingCount} en attente` : ""}
+              {sync.pendingCount > 0
+                ? ` • ${sync.pendingCount} en attente`
+                : ""}
             </Text>
           </View>
         </View>
@@ -95,9 +155,15 @@ export default function HomeDashboard() {
           {alerts.map((a) => (
             <View key={a.id} style={styles.alertRow}>
               <Ionicons
-                name={a.level === "HIGH" ? "warning-outline" : "information-circle-outline"}
+                name={
+                  a.level === "HIGH"
+                    ? "warning-outline"
+                    : "information-circle-outline"
+                }
                 size={18}
-                color={a.level === "HIGH" ? theme.colors.danger : theme.colors.accent}
+                color={
+                  a.level === "HIGH" ? theme.colors.danger : theme.colors.accent
+                }
               />
               <View style={{ flex: 1 }}>
                 <Text style={styles.alertRowTitle}>{a.title}</Text>
@@ -139,8 +205,16 @@ export default function HomeDashboard() {
         <View style={styles.statsCard}>
           <Text style={styles.statsTitle}>Statistiques personnelles</Text>
           <View style={styles.statsRow}>
-            <StatBox label="Contrôles" value={String(stats.controles)} icon="clipboard-outline" />
-            <StatBox label="Verbalisations" value={String(stats.verbalisations)} icon="document-text-outline" />
+            <StatBox
+              label="Contrôles"
+              value={String(stats.controles)}
+              icon="clipboard-outline"
+            />
+            <StatBox
+              label="Verbalisations"
+              value={String(stats.verbalisations)}
+              icon="document-text-outline"
+            />
           </View>
         </View>
 
@@ -152,12 +226,15 @@ export default function HomeDashboard() {
           </Pressable>
         </View>
 
-        <FlatList
-          data={activity}
-          keyExtractor={(i) => i.id}
+        <ScrollView
+          style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: theme.spacing.lg }}
-          renderItem={({ item }) => <ActivityRow item={item} />}
-        />
+          showsVerticalScrollIndicator={false}
+        >
+          {activity.map((item) => (
+            <ActivityRow key={item.id} item={item} />
+          ))}
+        </ScrollView>
       </View>
     </Screen>
   );
@@ -175,7 +252,10 @@ function QuickAction({
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.actionCard, pressed && { opacity: 0.88 }]}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.actionCard, pressed && { opacity: 0.88 }]}
+    >
       <View style={styles.actionIcon}>
         <Ionicons name={icon} size={20} color={theme.colors.accent} />
       </View>
@@ -208,8 +288,8 @@ function ActivityRow({ item }: { item: ActivityItem }) {
     item.status === "SYNCED"
       ? { text: "Sync", icon: "checkmark-circle-outline" as const }
       : item.status === "PENDING"
-      ? { text: "En attente", icon: "time-outline" as const }
-      : { text: "Erreur", icon: "close-circle-outline" as const };
+        ? { text: "En attente", icon: "time-outline" as const }
+        : { text: "Erreur", icon: "close-circle-outline" as const };
 
   return (
     <View style={styles.row}>
@@ -226,7 +306,11 @@ function ActivityRow({ item }: { item: ActivityItem }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: theme.spacing.md, paddingTop: theme.spacing.lg },
+  container: {
+    flex: 1,
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.lg,
+  },
 
   header: {
     flexDirection: "row",
@@ -235,7 +319,11 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
   },
   hi: { color: theme.colors.text, fontSize: theme.font.h1, fontWeight: "800" },
-  role: { color: theme.colors.textMuted, marginTop: 4, fontSize: theme.font.small },
+  role: {
+    color: theme.colors.textMuted,
+    marginTop: 4,
+    fontSize: theme.font.small,
+  },
 
   syncBadge: {
     flexDirection: "row",
@@ -248,7 +336,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border2,
   },
-  syncText: { color: "rgba(255,255,255,0.82)", fontSize: theme.font.small, fontWeight: "800" },
+  syncText: {
+    color: "rgba(255,255,255,0.82)",
+    fontSize: theme.font.small,
+    fontWeight: "800",
+  },
 
   alertCard: {
     borderRadius: theme.radius.lg,
@@ -258,15 +350,32 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
     marginBottom: theme.spacing.md,
   },
-  alertHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  alertTitle: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: "900" },
+  alertHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  alertTitle: {
+    color: theme.colors.text,
+    fontSize: theme.font.body,
+    fontWeight: "900",
+  },
   link: { color: "rgba(255,215,0,0.85)", fontWeight: "900" },
 
   alertRow: { flexDirection: "row", gap: 10, paddingTop: theme.spacing.md },
   alertRowTitle: { color: theme.colors.text, fontSize: 13, fontWeight: "800" },
-  alertRowDesc: { color: theme.colors.textDim, fontSize: theme.font.small, marginTop: 4 },
+  alertRowDesc: {
+    color: theme.colors.textDim,
+    fontSize: theme.font.small,
+    marginTop: 4,
+  },
 
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: theme.spacing.md },
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginBottom: theme.spacing.md,
+  },
   actionCard: {
     width: "48%",
     borderRadius: theme.radius.lg,
@@ -287,7 +396,11 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.accentBorder,
   },
   actionTitle: { color: theme.colors.text, fontSize: 14, fontWeight: "900" },
-  actionSubtitle: { color: theme.colors.textDim, fontSize: theme.font.small, marginTop: 4 },
+  actionSubtitle: {
+    color: theme.colors.textDim,
+    fontSize: theme.font.small,
+    marginTop: 4,
+  },
 
   statsCard: {
     borderRadius: theme.radius.lg,
@@ -297,7 +410,12 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
     marginBottom: theme.spacing.md,
   },
-  statsTitle: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: "900", marginBottom: 10 },
+  statsTitle: {
+    color: theme.colors.text,
+    fontSize: theme.font.body,
+    fontWeight: "900",
+    marginBottom: 10,
+  },
   statsRow: { flexDirection: "row", gap: 10 },
   statBox: {
     flex: 1,
@@ -312,8 +430,17 @@ const styles = StyleSheet.create({
   statValue: { color: theme.colors.text, fontSize: 18, fontWeight: "900" },
   statLabel: { color: theme.colors.textDim, fontSize: theme.font.small },
 
-  listHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
-  listTitle: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: "900" },
+  listHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  listTitle: {
+    color: theme.colors.text,
+    fontSize: theme.font.body,
+    fontWeight: "900",
+  },
 
   row: {
     flexDirection: "row",
@@ -327,7 +454,11 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   rowTitle: { color: theme.colors.text, fontSize: 13, fontWeight: "900" },
-  rowSub: { color: theme.colors.textDim, fontSize: theme.font.small, marginTop: 4 },
+  rowSub: {
+    color: theme.colors.textDim,
+    fontSize: theme.font.small,
+    marginTop: 4,
+  },
   rowBadge: {
     flexDirection: "row",
     gap: 6,
@@ -339,5 +470,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border2,
   },
-  rowBadgeText: { color: "rgba(255,255,255,0.85)", fontSize: theme.font.small, fontWeight: "900" },
+  rowBadgeText: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: theme.font.small,
+    fontWeight: "900",
+  },
 });
