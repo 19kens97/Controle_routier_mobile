@@ -15,3 +15,7 @@ export type UserProfile = {
 export async function getUserProfile() {
   return (await api.get("users/profile/")).data;
 }
+export async function updateUserProfile(payload: Partial<Pick<UserProfile, "first_name" | "last_name" | "email">>) {
+  const res = await api.patch("users/profile/update/", payload);
+  return res.data; // { message, data }
+}

@@ -118,7 +118,16 @@ export default function HomeDashboard() {
 
   return (
     <Screen>
-      <View style={styles.container}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingHorizontal: theme.spacing.md,
+          paddingTop: theme.spacing.lg,
+          paddingBottom: theme.spacing.lg,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+
         {/* Header */}
         <View style={styles.header}>
           <View>
@@ -226,16 +235,10 @@ export default function HomeDashboard() {
           </Pressable>
         </View>
 
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: theme.spacing.lg }}
-          showsVerticalScrollIndicator={false}
-        >
-          {activity.map((item) => (
-            <ActivityRow key={item.id} item={item} />
-          ))}
-        </ScrollView>
-      </View>
+        {activity.map((item) => (
+          <ActivityRow key={item.id} item={item} />
+        ))}
+      </ScrollView>
     </Screen>
   );
 }

@@ -56,7 +56,7 @@ api.interceptors.response.use(
     const status = error.response?.status;
     const originalRequest: any = error.config;
     const reqUrl = originalRequest?.url ?? "";
-    if (reqUrl.includes("token/refresh")) return Promise.reject(error);
+    if (reqUrl.includes("token/refresh")) return Promise.reject(error);   
     // si pas 401, laisse passer
     if (status !== 401) return Promise.reject(error);
 

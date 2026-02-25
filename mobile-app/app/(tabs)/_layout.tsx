@@ -10,7 +10,39 @@ export default function TabsLayout() {
         options={{
           title: "Accueil",
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? "home" : "home-outline"} size={size} color={color} />
+            <Ionicons
+              name={focused ? "home" : "home-outline"}
+              size={size}
+              color={color}
+            />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="documents"
+        options={{
+          title: "Documents",
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons
+              name={focused ? "folder" : "folder-outline"}
+              size={size}
+              color={color}
+            />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="stats"
+        options={{
+          title: "Stats",
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons
+              name={focused ? "stats-chart" : "stats-chart-outline"}
+              size={size}
+              color={color}
+            />
           ),
         }}
       />
@@ -20,7 +52,11 @@ export default function TabsLayout() {
         options={{
           title: "Profil",
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? "person" : "person-outline"} size={size} color={color} />
+            <Ionicons
+              name={focused ? "person" : "person-outline"}
+              size={size}
+              color={color}
+            />
           ),
         }}
       />
@@ -30,18 +66,22 @@ export default function TabsLayout() {
         options={{
           title: "Paramètres",
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? "settings" : "settings-outline"} size={size} color={color} />
+            <Ionicons
+              name={focused ? "settings" : "settings-outline"}
+              size={size}
+              color={color}
+            />
           ),
         }}
       />
 
-      {/* Si tu as un app/(tabs)/logout.tsx, cache-le du tab bar */}
-      <Tabs.Screen
+      {/* Cache logout du tab bar */}
+      {/* <Tabs.Screen
         name="logout"
         options={{
-          href: null, // 👈 cache l’onglet
+          href: null,
         }}
-      />
+      /> */}
     </Tabs>
   );
 }
