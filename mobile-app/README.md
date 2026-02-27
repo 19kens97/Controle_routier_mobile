@@ -1,50 +1,244 @@
-# Welcome to your Expo app 👋
+﻿# Controle Routier Mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)
 
-## Get started
+Application mobile React Native (Expo) pour les agents de controle routier.
 
-1. Install dependencies
+L'app permet de:
+- s'authentifier,
+- consulter un tableau de bord agent,
+- rechercher des documents (permis, carte vehicule, assurance, immatriculation),
+- consulter/modifier le profil,
+- gerer les parametres (preferences, notifications, securite locale),
+- gerer les flux mot de passe oublie / reinitialisation.
 
-   ```bash
-   npm install
-   ```
+## Sommaire
 
-2. Start the app
+- [Fonctionnalites](#fonctionnalites)
+- [Stack technique](#stack-technique)
+- [Structure du projet](#structure-du-projet)
+- [Prerequis](#prerequis)
+- [Installation et lancement](#installation-et-lancement)
+- [Configuration API](#configuration-api)
+- [Authentification](#authentification)
+- [Stockage local](#stockage-local)
+- [Scripts npm](#scripts-npm)
+- [Qualite et lint](#qualite-et-lint)
+- [Tests et CI](#tests-et-ci)
+- [Roadmap](#roadmap)
+- [Depannage](#depannage)
 
-   ```bash
-   npx expo start
-   ```
+## Fonctionnalites
 
-In the output, you'll find options to open the app in a
+### Authentification
+- Ecran de connexion (`/login`)
+- Mot de passe oublie (`/forgot-password`)
+- Reinitialisation mot de passe (`/reset-password`)
+- Redirection automatique selon session (`/`)
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### Navigation principale (tabs)
+- `Accueil` (`/(tabs)`): resume profil, alertes, actions rapides, activite recente
+- `Documents` (`/(tabs)/documents`): recherche par type de document
+- `Stats` (`/(tabs)/stats`): ecran present (contenu minimal pour l'instant)
+- `Profil` (`/(tabs)/profile`): consultation et edition des infos utilisateur
+- `Parametres` (`/(tabs)/settings`): preferences, sync locale, notifications, securite, deconnexion
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### Documents supportes
+- Permis (`DRIVER_LICENSE`)
+- Carte vehicule (`VEHICLE_CARD`)
+- Assurance vehicule (`VEHICLE_INSURANCE`)
+- Immatriculation (`VEHICLE_REGISTRATION`)
 
-## Get a fresh project
+## Stack technique
 
-When you're ready, run:
+- **Framework mobile**: Expo + React Native
+- **Langage**: TypeScript (strict mode)
+- **Routing**: Expo Router (file-based routing)
+- **HTTP client**: Axios
+- **Stockage securise tokens**: `expo-secure-store`
+- **Stockage preferences**: `@react-native-async-storage/async-storage`
+- **UI/UX**: composants React Native + theme custom (`constants/theme.ts`)
+- **Lint**: ESLint via `expo lint`
 
-```bash
-npm run reset-project
+## Structure du projet
+
+```text
+app/
+  _layout.tsx
+  index.tsx
+  login.tsx
+  forgot-password.tsx
+  reset-password.tsx
+  modal.tsx
+  (tabs)/
+    _layout.tsx
+    index.tsx
+    documents.tsx
+    stats.tsx
+    profile.tsx
+    settings.tsx
+
+src/
+  api/
+    api.ts
+    auth.api.ts
+    users.api.ts
+    documents.api.ts
+  storage/
+    settings.storage.ts
+  utils/
+    auth.ts
+    authEvents.ts
+
+components/
+constants/
+assets/
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Prerequis
 
-## Learn more
+- Node.js LTS
+- npm
+- Expo CLI (via `npx expo`)
+- Emulateur Android/iOS ou Expo Go
+- Backend API accessible depuis l'appareil/emulateur
 
-To learn more about developing your project with Expo, look at the following resources:
+## Installation et lancement
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+1. Installer les dependances:
 
-## Join the community
+```bash
+npm install
+```
 
-Join our community of developers creating universal apps.
+2. Demarrer le serveur Expo:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+npm run start
+```
+
+3. Lancer selon la cible:
+
+```bash
+npm run android
+npm run ios
+npm run web
+```
+
+## Configuration API
+
+L'URL API est configuree via variable d'environnement Expo:
+
+```bash
+EXPO_PUBLIC_API_BASE_URL=http://192.168.0.110:8000/api/
+```
+
+Un exemple est fourni dans `.env.example`.
+Copie-le vers `.env.local` et adapte la valeur selon ton environnement.
+
+### Important
+- Adapte cette URL a ton environnement (IP locale, staging, production).
+- En production, privilegie HTTPS.
+- Idealement, centraliser la configuration d'environnement (dev/staging/prod).
+
+## Authentification
+
+- Login: `POST users/login/`
+- Refresh token: `POST users/token/refresh/`
+- Logout: `POST users/logout/`
+- Profil: `GET users/profile/`
+
+Le client Axios ajoute automatiquement le bearer token via interceptor.
+En cas de `401`, un mecanisme de refresh tente de regenerer l'access token puis rejoue la requete.
+
+## Stockage local
+
+- **SecureStore**
+  - `access_token`
+  - `refresh_token`
+
+- **AsyncStorage**
+  - `cr_app_settings_v1` (preferences app)
+
+## Scripts npm
+
+- `npm run start`: lance Expo
+- `npm run android`: ouvre Android
+- `npm run ios`: ouvre iOS
+- `npm run web`: ouvre Web
+- `npm run lint`: lance ESLint
+- `npm run typecheck`: verification TypeScript sans emission
+- `npm test`: execute la suite de tests Jest
+- `npm run test:watch`: execute les tests en mode watch
+- `npm run reset-project`: script Expo de reset du projet
+
+## Qualite et lint
+
+Lancer:
+
+```bash
+npm run lint
+```
+
+Le lint est actif sur le projet. Corriger les erreurs/warnings avant release.
+
+## Tests et CI
+
+### Tests locaux
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+```
+
+### CI GitHub Actions
+
+Workflow present dans:
+- `.github/workflows/ci.yml`
+
+Le pipeline execute:
+- installation (`npm ci`)
+- lint
+- typecheck
+- tests
+
+### Badge CI
+
+Le badge en haut du README utilise `OWNER/REPO` comme placeholder.
+Remplace `OWNER/REPO` par le chemin reel de ton repository GitHub.
+
+## Roadmap
+
+- Finaliser l'ecran `Stats`
+- Brancher les actions rapides du dashboard aux vrais modules
+- Ajouter un module de synchronisation offline/online complet
+- Ajouter verrouillage PIN/biometrie
+- Introduire tests unitaires/integration
+- Centraliser la config d'environnement API
+- Completer la documentation backend/contrats API
+
+## Depannage
+
+### L'app ne se connecte pas au backend
+- Verifier l'IP/port API configures
+- Verifier que le mobile/emulateur est sur le meme reseau
+- Verifier les routes backend (`/api/...`)
+
+### Erreurs 401 frequentes
+- Verifier le format des tokens renvoyes par le backend
+- Verifier la route de refresh
+- Reconnecter l'utilisateur (purge SecureStore)
+
+### Ecran blanc au demarrage
+- Verifier les logs Expo
+- Verifier la redirection dans `app/index.tsx`
+- Verifier la presence des tokens si l'utilisateur est considere authentifie
+
+---
+
+## Auteur / Equipe
+
+Projet interne CompuConsult - Controle Routier Mobile.
+
+Si besoin, je peux aussi te generer une version `README` orientee utilisateur final (non technique) en plus de celle-ci.

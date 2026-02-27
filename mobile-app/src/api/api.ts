@@ -1,10 +1,11 @@
 // src/api/api.ts
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 import * as SecureStore from "expo-secure-store";
-import { clearTokens, saveTokens } from "../utils/auth";
+import { apiUrl, API_BASE_URL } from "../config/api";
+import { clearTokens } from "../utils/auth";
 
 const api = axios.create({
-  baseURL: "http://192.168.0.110:8000/api/", // <-- root
+  baseURL: API_BASE_URL,
   timeout: 10000,
   headers: { "Content-Type": "application/json" },
 });
@@ -29,8 +30,7 @@ async function refreshAccessToken(): Promise<string | null> {
   const refresh = await SecureStore.getItemAsync(REFRESH_KEY);
   if (!refresh) return null;
 
-  // ✅ Ton endpoint custom (à adapter EXACTEMENT à ton urls.py)
-  const url = "http://192.168.0.110:8000/api/users/token/refresh/";
+  const url = apiUrl("users/token/refresh/");
 
   const res = await axios.post(
     url,
@@ -84,7 +84,7 @@ api.interceptors.response.use(
       originalRequest.headers.Authorization = `Bearer ${newToken}`;
 
       return api(originalRequest);
-    } catch (e) {
+    } catch {
       await clearTokens();
       return Promise.reject(error);
     }

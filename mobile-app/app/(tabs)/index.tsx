@@ -6,7 +6,6 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Screen from "../../components/screen";
 import { theme } from "../../constants/theme";
 import { getUserProfile, UserProfile } from "../../src/api/users.api";
-import * as SecureStore from "expo-secure-store";
 
 type AlertItem = {
   id: string;
@@ -30,11 +29,10 @@ export default function HomeDashboard() {
     // console.log("HomeDashboard mounted -> fetching profile...");
     let mounted = true;
     (async () => {
-      const t = await SecureStore.getItemAsync("access_token");
       try {
         const res = await getUserProfile(); // { message, data }
         if (mounted) setProfile(res?.data ?? null);
-      } catch (e) {
+      } catch {
         // Si 401: token manquant/expiré -> tu peux rediriger login
         // router.replace("/login");
         if (mounted) setProfile(null);
@@ -55,7 +53,6 @@ export default function HomeDashboard() {
     return full || profile.username || "Agent";
   }, [profile]);
 
-  const userRole = profile?.role || "AGENT_TERRAIN";
   const sync = useMemo(() => ({ online: true, pendingCount: 2 }), []);
   const stats = useMemo(() => ({ controles: 7, verbalisations: 3 }), []);
 
@@ -188,7 +185,7 @@ export default function HomeDashboard() {
             icon="scan-outline"
             title="Scanner plaque"
             subtitle="OCR + cadrage"
-            onPress={() => router.push("/modal")} // TODO: /scan
+            onPress={() => router.push("/scan-plate" as any)}
           />
           <QuickAction
             icon="search-outline"

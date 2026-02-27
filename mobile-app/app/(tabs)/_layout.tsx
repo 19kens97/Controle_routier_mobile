@@ -75,13 +75,6 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* Cache logout du tab bar */}
-      {/* <Tabs.Screen
-        name="logout"
-        options={{
-          href: null,
-        }}
-      /> */}
     </Tabs>
   );
 }

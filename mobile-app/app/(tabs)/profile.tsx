@@ -74,7 +74,7 @@ export default function ProfileScreen() {
         last_name: p?.last_name ?? "",
         email: p?.email ?? "",
       });
-    } catch (e: any) {
+    } catch {
       setProfile(null);
       setErrorMsg("Impossible de charger le profil. Vérifie ta connexion.");
     } finally {
@@ -121,7 +121,7 @@ export default function ProfileScreen() {
 
       setProfile(merged);
       setIsEditing(false);
-    } catch (e: any) {
+    } catch {
       // si ton api renvoie errors détaillées, tu peux les afficher ici
       setErrorMsg("Erreur lors de l’enregistrement. Vérifie les champs.");
     } finally {

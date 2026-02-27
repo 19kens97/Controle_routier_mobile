@@ -6,7 +6,7 @@ export default function Settings() {
     <Screen>
       <View style={styles.container}>
         <Text style={styles.title}>Statistiques</Text>
-        <Text style={styles.subtitle}>Options de l'application et préférences</Text>
+        <Text style={styles.subtitle}>Options de l&apos;application et preferences</Text>
       </View>
     </Screen>
   );

@@ -16,17 +16,18 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import * as Application from "expo-application";
+import { BlurView } from "expo-blur";
 
 import Screen from "../../components/screen";
 import { theme } from "../../constants/theme";
 import { getUserProfile, UserProfile } from "../../src/api/users.api";
 import { changePassword, logout } from "../../src/api/auth.api";
+import { API_BASE_URL, IS_FALLBACK_API_BASE_URL } from "../../src/config/api";
 import {
   AppSettings,
   loadSettings,
   resetSettings,
   saveSettings,
-  SyncPolicy,
   TextSize,
   ThemeMode,
 } from "../../src/storage/settings.storage";
@@ -147,10 +148,10 @@ export default function SettingsScreen() {
       setOldPw("");
       setNewPw("");
       Alert.alert("Succès", "Mot de passe modifié. Si tu rencontres un souci, reconnecte-toi.");
-    } catch (e: any) {
+    } catch (e: unknown) {
       const msg =
-        e?.response?.data?.message ||
-        e?.response?.data?.detail ||
+        (e as any)?.response?.data?.message ||
+        (e as any)?.response?.data?.detail ||
         "Impossible de modifier le mot de passe.";
       setPwError(typeof msg === "string" ? msg : "Erreur.");
     } finally {
@@ -176,7 +177,7 @@ export default function SettingsScreen() {
             if (refresh) {
               try {
                 await logout(refresh);
-              } catch (e) {
+              } catch {
                 serverLogoutOk = false;
               }
             } else {
@@ -416,7 +417,10 @@ export default function SettingsScreen() {
 
           <Row label="Version" value={appVersion} />
           <Row label="Environnement" value="DEV" />
-          <Row label="Serveur (baseURL)" value={String((global as any)?.API_BASE_URL ?? "Voir src/api/api.ts")} />
+          <Row
+            label="Serveur (baseURL)"
+            value={`${API_BASE_URL}${IS_FALLBACK_API_BASE_URL ? " (fallback)" : ""}`}
+          />
 
           <Divider />
 
@@ -451,8 +455,31 @@ export default function SettingsScreen() {
       </ScrollView>
 
       {/* MODAL CHANGE PASSWORD */}
-      <Modal visible={pwOpen} transparent animationType="fade" onRequestClose={() => setPwOpen(false)}>
-        <View style={styles.modalBackdrop}>
+      {/* MODAL CHANGE PASSWORD */}
+      <Modal
+        visible={pwOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPwOpen(false)}
+      >
+        <View style={styles.modalRoot}>
+          {/* Fond flou */}
+          <BlurView
+            intensity={35}
+            tint="dark"
+            style={StyleSheet.absoluteFill}
+          />
+
+          {/* Assombrissement + zone cliquable pour fermer */}
+          <Pressable
+            style={[StyleSheet.absoluteFill, styles.modalDim]}
+            onPress={() => {
+              setPwOpen(false);
+              setPwError(null);
+            }}
+          />
+
+          {/* Carte popup */}
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Changer le mot de passe</Text>
 
@@ -492,11 +519,7 @@ export default function SettingsScreen() {
                 onPress={onSubmitChangePassword}
                 disabled={pwLoading}
               >
-                {pwLoading ? (
-                  <ActivityIndicator />
-                ) : (
-                  <Text style={styles.modalBtnText}>Valider</Text>
-                )}
+                {pwLoading ? <ActivityIndicator /> : <Text style={styles.modalBtnText}>Valider</Text>}
               </Pressable>
             </View>
           </View>
@@ -711,19 +734,43 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
-    padding: 20,
-  },
+  modalRoot: {
+  flex: 1,
+  justifyContent: "center",
+  padding: 20,
+},
 
-  modalCard: {
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.md,
-    backgroundColor: theme.colors.surface,
-    gap: 10,
-  },
+modalDim: {
+  backgroundColor: "rgba(0,0,0,0.35)", // petit voile sombre par-dessus le blur
+},
+
+modalCard: {
+  borderRadius: theme.radius.lg,
+  padding: theme.spacing.md,
+  backgroundColor: theme.colors.surface,
+  gap: 10,
+
+  // mise en évidence (ombre)
+  shadowColor: "#000",
+  shadowOpacity: 0.25,
+  shadowRadius: 12,
+  shadowOffset: { width: 0, height: 6 },
+  elevation: 8,
+},
+
+  // modalBackdrop: {
+  //   flex: 1,
+  //   backgroundColor: "rgba(0,0,0,0.6)",
+  //   justifyContent: "center",
+  //   padding: 20,
+  // },
+
+  // modalCard: {
+  //   borderRadius: theme.radius.lg,
+  //   padding: theme.spacing.md,
+  //   backgroundColor: theme.colors.surface,
+  //   gap: 10,
+  // },
 
   modalTitle: {
     color: theme.colors.text,
