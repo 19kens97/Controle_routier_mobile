@@ -78,7 +78,7 @@ function createStyles(theme: AppTheme) {
     },
     metricValue: {
       color: theme.colors.text,
-      fontSize: 22,
+      fontSize: theme.font.h1,
       fontWeight: "900",
     },
     metricLabel: {
@@ -88,7 +88,7 @@ function createStyles(theme: AppTheme) {
     },
     insightText: {
       color: theme.colors.textMuted,
-      fontSize: 13,
+      fontSize: theme.font.body,
       lineHeight: 20,
       fontWeight: "700",
     },

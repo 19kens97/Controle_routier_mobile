@@ -830,7 +830,7 @@ function createStyles(theme: AppTheme) {
 
   title: {
     color: theme.colors.text,
-    fontSize: 22,
+    fontSize: theme.font.h1,
     fontWeight: "900",
   },
 
@@ -852,12 +852,12 @@ function createStyles(theme: AppTheme) {
   cardTitle: {
     color: theme.colors.text,
     fontWeight: "900",
-    fontSize: 14,
+    fontSize: theme.font.body,
   },
 
   prefStateText: {
     color: theme.colors.textDim,
-    fontSize: 12,
+    fontSize: theme.font.small,
     fontWeight: "700",
   },
 
@@ -875,13 +875,13 @@ function createStyles(theme: AppTheme) {
 
   kSmall: {
     color: theme.colors.textMuted,
-    fontSize: 12,
+    fontSize: theme.font.small,
     fontWeight: "800",
   },
 
   vSmall: {
     color: theme.colors.text,
-    fontSize: 13,
+    fontSize: theme.font.body,
     fontWeight: "700",
   },
 
@@ -919,11 +919,12 @@ function createStyles(theme: AppTheme) {
   toggleLabel: {
     color: theme.colors.text,
     fontWeight: "800",
+    fontSize: theme.font.body,
   },
 
   toggleDesc: {
     color: theme.colors.textDim,
-    fontSize: 12,
+    fontSize: theme.font.small,
     marginTop: 2,
   },
 
@@ -937,6 +938,7 @@ function createStyles(theme: AppTheme) {
   selectLabel: {
     color: theme.colors.text,
     fontWeight: "800",
+    fontSize: theme.font.body,
   },
 
   selectRight: {
@@ -948,6 +950,7 @@ function createStyles(theme: AppTheme) {
   selectValue: {
     color: theme.colors.textDim,
     fontWeight: "800",
+    fontSize: theme.font.body,
   },
 
   btn: {
@@ -962,6 +965,7 @@ function createStyles(theme: AppTheme) {
   btnText: {
     color: theme.colors.text,
     fontWeight: "900",
+    fontSize: theme.font.body,
   },
 
   modalRoot: {
@@ -1005,12 +1009,12 @@ modalCard: {
   modalTitle: {
     color: theme.colors.text,
     fontWeight: "900",
-    fontSize: 16,
+    fontSize: theme.font.h2,
   },
 
   modalSubtitle: {
     color: theme.colors.textDim,
-    fontSize: 12,
+    fontSize: theme.font.small,
     lineHeight: 18,
   },
 
@@ -1044,11 +1048,12 @@ modalCard: {
   themeOptionLabel: {
     color: theme.colors.text,
     fontWeight: "900",
+    fontSize: theme.font.body,
   },
 
   themeOptionDesc: {
     color: theme.colors.textDim,
-    fontSize: 12,
+    fontSize: theme.font.small,
   },
 
   modalBtns: {
@@ -1074,11 +1079,13 @@ modalCard: {
   modalBtnText: {
     color: theme.colors.text,
     fontWeight: "900",
+    fontSize: theme.font.body,
   },
 
   modalBtnTextGhost: {
     color: theme.colors.textDim,
     fontWeight: "900",
+    fontSize: theme.font.body,
   },
 
   input: {
@@ -1090,11 +1097,13 @@ modalCard: {
     color: theme.colors.text,
     backgroundColor: theme.colors.surface2,
     fontWeight: "700",
+    fontSize: theme.font.body,
   },
 
   error: {
     color: theme.colors.danger,
     fontWeight: "800",
+    fontSize: theme.font.small,
   },
   });
 }

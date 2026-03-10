@@ -397,7 +397,7 @@ function createStyles(theme: AppTheme) {
   link: { color: "rgba(255,215,0,0.85)", fontWeight: "900" },
 
   alertRow: { flexDirection: "row", gap: 10, paddingTop: theme.spacing.md },
-  alertRowTitle: { color: theme.colors.text, fontSize: 13, fontWeight: "800" },
+  alertRowTitle: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: "800" },
   alertRowDesc: {
     color: theme.colors.textDim,
     fontSize: theme.font.small,
@@ -429,7 +429,7 @@ function createStyles(theme: AppTheme) {
     borderWidth: 1,
     borderColor: theme.colors.accentBorder,
   },
-  actionTitle: { color: theme.colors.text, fontSize: 14, fontWeight: "900" },
+  actionTitle: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: "900" },
   actionSubtitle: {
     color: theme.colors.textDim,
     fontSize: theme.font.small,
@@ -461,7 +461,7 @@ function createStyles(theme: AppTheme) {
     borderColor: theme.colors.border2,
     gap: 6,
   },
-  statValue: { color: theme.colors.text, fontSize: 18, fontWeight: "900" },
+  statValue: { color: theme.colors.text, fontSize: theme.font.h2, fontWeight: "900" },
   statLabel: { color: theme.colors.textDim, fontSize: theme.font.small },
 
   listHeader: {
@@ -487,7 +487,7 @@ function createStyles(theme: AppTheme) {
     borderColor: theme.colors.border2,
     marginBottom: 10,
   },
-  rowTitle: { color: theme.colors.text, fontSize: 13, fontWeight: "900" },
+  rowTitle: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: "900" },
   rowSub: {
     color: theme.colors.textDim,
     fontSize: theme.font.small,

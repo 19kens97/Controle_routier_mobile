@@ -162,8 +162,8 @@ function createStyles(theme: AppTheme) {
 
   header: { alignItems: "center", marginBottom: theme.spacing.lg },
   logo: { width: 62, height: 62, marginBottom: 10 },
-  brand: { color: theme.colors.text, fontSize: 26, fontWeight: "800" },
-  sub: { marginTop: 6, color: theme.colors.textDim, fontSize: 13, fontWeight: "700" },
+  brand: { color: theme.colors.text, fontSize: theme.font.h1, fontWeight: "800" },
+  sub: { marginTop: 6, color: theme.colors.textDim, fontSize: theme.font.small, fontWeight: "700" },
   inputWrap: {
     flexDirection: "row",
     alignItems: "center",
@@ -176,12 +176,12 @@ function createStyles(theme: AppTheme) {
     borderColor: theme.colors.border,
     marginBottom: 12,
   },
-  input: { flex: 1, color: theme.colors.text, fontSize: 14 },
+  input: { flex: 1, color: theme.colors.text, fontSize: theme.font.body },
 
   forgot: { alignSelf: "flex-end", marginTop: -4, marginBottom: 10 },
-  forgotText: { color: "rgba(255,215,0,0.85)", fontSize: 12, fontWeight: "600" },
+  forgotText: { color: "rgba(255,215,0,0.85)", fontSize: theme.font.small, fontWeight: "600" },
 
-  error: { color: "#FFB4B4", fontSize: 12, marginBottom: 10 },
+  error: { color: "#FFB4B4", fontSize: theme.font.small, marginBottom: 10 },
 
   buttonDisabled: { opacity: 0.45 },
   });

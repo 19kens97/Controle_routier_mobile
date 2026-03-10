@@ -253,7 +253,7 @@ function createStyles(theme: AppTheme) {
   },
   engineText: {
     color: theme.colors.text,
-    fontSize: 12,
+    fontSize: theme.font.small,
     fontWeight: "800",
   },
   actionRow: {
@@ -271,7 +271,7 @@ function createStyles(theme: AppTheme) {
   },
   actionBtnText: {
     color: theme.colors.text,
-    fontSize: 12,
+    fontSize: theme.font.small,
     fontWeight: "800",
   },
   preview: {
@@ -284,14 +284,15 @@ function createStyles(theme: AppTheme) {
   scanBtnText: {
     color: theme.colors.text,
     fontWeight: "900",
+    fontSize: theme.font.body,
   },
   loadingRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  value: { color: theme.colors.textMuted, fontSize: 13, fontWeight: "700" },
-  errorText: { color: theme.colors.danger, fontSize: 12, fontWeight: "700" },
+  value: { color: theme.colors.textMuted, fontSize: theme.font.body, fontWeight: "700" },
+  errorText: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: "700" },
   resultBox: {
     gap: 6,
     borderRadius: theme.radius.md,
@@ -302,7 +303,7 @@ function createStyles(theme: AppTheme) {
   },
   resultTitle: {
     color: theme.colors.text,
-    fontSize: 13,
+    fontSize: theme.font.body,
     fontWeight: "900",
   },
   linkBtn: {
@@ -310,6 +311,6 @@ function createStyles(theme: AppTheme) {
     paddingVertical: 6,
     paddingHorizontal: 8,
   },
-  linkText: { color: "rgba(255,215,0,0.9)", fontWeight: "900" },
+  linkText: { color: "rgba(255,215,0,0.9)", fontWeight: "900", fontSize: theme.font.body },
   });
 }

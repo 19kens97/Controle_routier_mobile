@@ -388,7 +388,7 @@ function createStyles(theme: AppTheme) {
   avatarText: {
     color: theme.colors.text,
     fontWeight: "900",
-    fontSize: 18,
+    fontSize: theme.font.h2,
   },
 
   name: {
@@ -488,7 +488,7 @@ function createStyles(theme: AppTheme) {
   },
   infoValue: {
     color: theme.colors.text,
-    fontSize: 14,
+    fontSize: theme.font.body,
     fontWeight: "900",
     marginTop: 4,
   },
@@ -525,6 +525,7 @@ function createStyles(theme: AppTheme) {
     borderColor: theme.colors.border2,
     color: theme.colors.text,
     fontWeight: "800",
+    fontSize: theme.font.body,
   },
 
   actionsRow: {
@@ -554,6 +555,7 @@ function createStyles(theme: AppTheme) {
   btnText: {
     color: "rgba(255,255,255,0.9)",
     fontWeight: "900",
+    fontSize: theme.font.body,
   },
   });
 }

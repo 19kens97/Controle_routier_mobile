@@ -12,12 +12,12 @@ export function createPageStyles(theme: AppTheme) {
     },
     title: {
       color: theme.colors.text,
-      fontSize: 22,
+      fontSize: theme.font.h1,
       fontWeight: "900",
     },
     subtitle: {
       color: theme.colors.textDim,
-      fontSize: 13,
+      fontSize: theme.font.small,
       marginTop: -4,
     },
     card: {
@@ -36,7 +36,7 @@ export function createPageStyles(theme: AppTheme) {
     cardTitle: {
       color: theme.colors.text,
       fontWeight: "900",
-      fontSize: 14,
+      fontSize: theme.font.body,
     },
     input: {
       borderWidth: 1,
@@ -47,6 +47,7 @@ export function createPageStyles(theme: AppTheme) {
       color: theme.colors.text,
       backgroundColor: theme.colors.surface2,
       fontWeight: "700",
+      fontSize: theme.font.body,
     },
     primaryButton: {
       borderRadius: theme.radius.md,
@@ -60,6 +61,7 @@ export function createPageStyles(theme: AppTheme) {
     primaryButtonText: {
       color: theme.colors.text,
       fontWeight: "900",
+      fontSize: theme.font.body,
     },
     secondaryButton: {
       borderRadius: theme.radius.md,
@@ -73,6 +75,7 @@ export function createPageStyles(theme: AppTheme) {
     secondaryButtonText: {
       color: theme.colors.text,
       fontWeight: "800",
+      fontSize: theme.font.body,
     },
     center: {
       flex: 1,

@@ -265,8 +265,8 @@ function createStyles(theme: AppTheme) {
     paddingBottom: theme.spacing.lg,
     gap: 12,
   },
-  title: { color: theme.colors.text, fontSize: 22, fontWeight: "900" },
-  subtitle: { color: theme.colors.textDim, marginTop: -6 },
+  title: { color: theme.colors.text, fontSize: theme.font.h1, fontWeight: "900" },
+  subtitle: { color: theme.colors.textDim, marginTop: -6, fontSize: theme.font.small },
 
   chipsRow: {
     flexDirection: "row",
@@ -297,7 +297,7 @@ function createStyles(theme: AppTheme) {
     borderColor: theme.colors.border,
     gap: 10,
   },
-  cardTitle: { color: theme.colors.text, fontWeight: "900", fontSize: 14 },
+  cardTitle: { color: theme.colors.text, fontWeight: "900", fontSize: theme.font.body },
 
   input: {
     borderWidth: 1,
@@ -308,6 +308,7 @@ function createStyles(theme: AppTheme) {
     color: theme.colors.text,
     backgroundColor: theme.colors.surface2,
     fontWeight: "700",
+    fontSize: theme.font.body,
   },
 
   btn: {
@@ -318,9 +319,9 @@ function createStyles(theme: AppTheme) {
     borderWidth: 1,
     borderColor: theme.colors.accentBorder,
   },
-  btnText: { color: theme.colors.text, fontWeight: "900" },
+  btnText: { color: theme.colors.text, fontWeight: "900", fontSize: theme.font.body },
 
-  error: { color: theme.colors.danger, fontWeight: "800" },
+  error: { color: theme.colors.danger, fontWeight: "800", fontSize: theme.font.small },
 
   kvRow: {
     borderTopWidth: 1,
@@ -328,8 +329,8 @@ function createStyles(theme: AppTheme) {
     paddingTop: 10,
     gap: 6,
   },
-  k: { color: theme.colors.textMuted, fontSize: 12, fontWeight: "800" },
-  v: { color: theme.colors.text, fontSize: 13, fontWeight: "700" },
+  k: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: "800" },
+  v: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: "700" },
 
   historyRow: {
     flexDirection: "row",
@@ -339,7 +340,7 @@ function createStyles(theme: AppTheme) {
     borderTopWidth: 1,
     borderTopColor: theme.colors.border2,
   },
-  historyLeft: { color: theme.colors.text, fontWeight: "900" },
-  historyRight: { color: theme.colors.textDim, fontWeight: "800" },
+  historyLeft: { color: theme.colors.text, fontWeight: "900", fontSize: theme.font.body },
+  historyRight: { color: theme.colors.textDim, fontWeight: "800", fontSize: theme.font.body },
   });
 }
