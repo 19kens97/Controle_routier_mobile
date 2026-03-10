@@ -32,6 +32,26 @@ import {
   TextSize,
 } from "../../src/storage/settings.storage";
 
+const THEME_OPTIONS: { mode: ThemeMode; label: string; description: string }[] = [
+  { mode: "SYSTEM", label: "Système", description: "Palette bleue de l'application." },
+  { mode: "DARK", label: "Sombre", description: "Fond sombre, contraste élevé." },
+  { mode: "LIGHT", label: "Clair", description: "Fond clair, tons chauds." },
+];
+
+const TEXT_SIZE_OPTIONS: { size: TextSize; label: string; description: string }[] = [
+  { size: "SMALL", label: "Petite", description: "Affichage plus compact." },
+  { size: "NORMAL", label: "Normale", description: "Taille recommandée par défaut." },
+  { size: "LARGE", label: "Grande", description: "Texte plus lisible sur tous les écrans." },
+];
+
+function getThemeLabel(mode: ThemeMode) {
+  return THEME_OPTIONS.find((option) => option.mode === mode)?.label ?? mode;
+}
+
+function getTextSizeLabel(size: TextSize) {
+  return TEXT_SIZE_OPTIONS.find((option) => option.size === size)?.label ?? size;
+}
+
 function roleLabel(role?: string) {
   return role === "AGENT_TERRAIN"
     ? "Agent de terrain"
@@ -49,7 +69,7 @@ function maskValue(v: string, enabled: boolean) {
 }
 
 export default function SettingsScreen() {
-  const { theme, setThemeMode } = useAppTheme();
+  const { theme, setTextSize, setThemeMode } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -57,6 +77,10 @@ export default function SettingsScreen() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [prefSaveState, setPrefSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [themePickerOpen, setThemePickerOpen] = useState(false);
+  const [pendingThemeMode, setPendingThemeMode] = useState<ThemeMode>("SYSTEM");
+  const [textSizePickerOpen, setTextSizePickerOpen] = useState(false);
+  const [pendingTextSize, setPendingTextSize] = useState<TextSize>("NORMAL");
 
   const [syncState, setSyncState] = useState({ online: true, pending: 0 }); // V1 local
 
@@ -87,7 +111,11 @@ export default function SettingsScreen() {
     (async () => {
       try {
         const s = await loadSettings();
-        if (mounted) setSettings(s);
+        if (mounted) {
+          setSettings(s);
+          setPendingThemeMode(s.themeMode);
+          setPendingTextSize(s.textSize);
+        }
       } finally {
         if (mounted) setLoadingSettings(false);
       }
@@ -115,11 +143,40 @@ export default function SettingsScreen() {
     }
   }
 
-  async function onCycleTheme() {
+  function openThemePicker() {
     if (!settings) return;
-    const next = getNextTheme(settings.themeMode);
-    await updateSettings({ themeMode: next });
-    setThemeMode(next);
+    setPendingThemeMode(settings.themeMode);
+    setThemePickerOpen(true);
+  }
+
+  async function onSaveThemeSelection() {
+    if (!settings) return;
+    const next = pendingThemeMode;
+
+    if (next !== settings.themeMode) {
+      await updateSettings({ themeMode: next });
+      setThemeMode(next);
+    }
+
+    setThemePickerOpen(false);
+  }
+
+  function openTextSizePicker() {
+    if (!settings) return;
+    setPendingTextSize(settings.textSize);
+    setTextSizePickerOpen(true);
+  }
+
+  async function onSaveTextSizeSelection() {
+    if (!settings) return;
+    const next = pendingTextSize;
+
+    if (next !== settings.textSize) {
+      await updateSettings({ textSize: next });
+      setTextSize(next);
+    }
+
+    setTextSizePickerOpen(false);
   }
 
   const appVersion = useMemo(() => {
@@ -139,7 +196,12 @@ export default function SettingsScreen() {
           style: "destructive",
           onPress: async () => {
             await resetSettings();
-            setSettings(await loadSettings());
+            const nextSettings = await loadSettings();
+            setSettings(nextSettings);
+            setPendingThemeMode(nextSettings.themeMode);
+            setPendingTextSize(nextSettings.textSize);
+            setThemeMode(nextSettings.themeMode);
+            setTextSize(nextSettings.textSize);
             // tokens: tu peux choisir de ne pas toucher ici.
             Alert.alert("OK", "Données locales réinitialisées.");
           },
@@ -297,14 +359,8 @@ export default function SettingsScreen() {
 
           <SelectRow
             label="Thème"
-            value={
-              settings.themeMode === "SYSTEM"
-                ? "Système"
-                : settings.themeMode === "DARK"
-                  ? "Sombre"
-                  : "Clair"
-            }
-            onPress={onCycleTheme}
+            value={getThemeLabel(settings.themeMode)}
+            onPress={openThemePicker}
             styles={styles}
             theme={theme}
           />
@@ -321,14 +377,8 @@ export default function SettingsScreen() {
 
           <SelectRow
             label="Taille du texte"
-            value={
-              settings.textSize === "SMALL"
-                ? "Petite"
-                : settings.textSize === "LARGE"
-                  ? "Grande"
-                  : "Normale"
-            }
-            onPress={() => cycleTextSize(settings.textSize, (v) => updateSettings({ textSize: v }))}
+            value={getTextSizeLabel(settings.textSize)}
+            onPress={openTextSizePicker}
             styles={styles}
             theme={theme}
           />
@@ -500,6 +550,132 @@ export default function SettingsScreen() {
       {/* MODAL CHANGE PASSWORD */}
       {/* MODAL CHANGE PASSWORD */}
       <Modal
+        visible={textSizePickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTextSizePickerOpen(false)}
+      >
+        <View style={styles.modalRoot}>
+          <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+
+          <Pressable
+            style={[StyleSheet.absoluteFill, styles.modalDim]}
+            onPress={() => setTextSizePickerOpen(false)}
+          />
+
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Choisir la taille du texte</Text>
+            <Text style={styles.modalSubtitle}>
+              La taille sélectionnée sera appliquée à toute l'application après Enregistrer.
+            </Text>
+
+            <View style={styles.themeOptions}>
+              {TEXT_SIZE_OPTIONS.map((option) => {
+                const selected = pendingTextSize === option.size;
+
+                return (
+                  <Pressable
+                    key={option.size}
+                    style={[
+                      styles.themeOption,
+                      selected && styles.themeOptionSelected,
+                    ]}
+                    onPress={() => setPendingTextSize(option.size)}
+                  >
+                    <View style={styles.themeOptionCopy}>
+                      <Text style={styles.themeOptionLabel}>{option.label}</Text>
+                      <Text style={styles.themeOptionDesc}>{option.description}</Text>
+                    </View>
+                    <Ionicons
+                      name={selected ? "radio-button-on" : "radio-button-off"}
+                      size={20}
+                      color={selected ? theme.colors.accent : theme.colors.textDim}
+                    />
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View style={styles.modalBtns}>
+              <Pressable
+                style={[styles.modalBtn, styles.modalBtnGhost]}
+                onPress={() => setTextSizePickerOpen(false)}
+              >
+                <Text style={styles.modalBtnTextGhost}>Annuler</Text>
+              </Pressable>
+
+              <Pressable style={styles.modalBtn} onPress={onSaveTextSizeSelection}>
+                <Text style={styles.modalBtnText}>Enregistrer</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={themePickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setThemePickerOpen(false)}
+      >
+        <View style={styles.modalRoot}>
+          <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+
+          <Pressable
+            style={[StyleSheet.absoluteFill, styles.modalDim]}
+            onPress={() => setThemePickerOpen(false)}
+          />
+
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Choisir un thème</Text>
+            <Text style={styles.modalSubtitle}>
+              Sélectionne une option puis appuie sur Enregistrer pour appliquer le changement.
+            </Text>
+
+            <View style={styles.themeOptions}>
+              {THEME_OPTIONS.map((option) => {
+                const selected = pendingThemeMode === option.mode;
+
+                return (
+                  <Pressable
+                    key={option.mode}
+                    style={[
+                      styles.themeOption,
+                      selected && styles.themeOptionSelected,
+                    ]}
+                    onPress={() => setPendingThemeMode(option.mode)}
+                  >
+                    <View style={styles.themeOptionCopy}>
+                      <Text style={styles.themeOptionLabel}>{option.label}</Text>
+                      <Text style={styles.themeOptionDesc}>{option.description}</Text>
+                    </View>
+                    <Ionicons
+                      name={selected ? "radio-button-on" : "radio-button-off"}
+                      size={20}
+                      color={selected ? theme.colors.accent : theme.colors.textDim}
+                    />
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View style={styles.modalBtns}>
+              <Pressable
+                style={[styles.modalBtn, styles.modalBtnGhost]}
+                onPress={() => setThemePickerOpen(false)}
+              >
+                <Text style={styles.modalBtnTextGhost}>Annuler</Text>
+              </Pressable>
+
+              <Pressable style={styles.modalBtn} onPress={onSaveThemeSelection}>
+                <Text style={styles.modalBtnText}>Enregistrer</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
         visible={pwOpen}
         transparent
         animationType="fade"
@@ -641,15 +817,6 @@ function SelectRow({
       </View>
     </Pressable>
   );
-}
-
-function getNextTheme(cur: ThemeMode): ThemeMode {
-  return cur === "SYSTEM" ? "DARK" : cur === "DARK" ? "LIGHT" : "SYSTEM";
-}
-
-function cycleTextSize(cur: TextSize, set: (v: TextSize) => void) {
-  const next: TextSize = cur === "SMALL" ? "NORMAL" : cur === "NORMAL" ? "LARGE" : "SMALL";
-  set(next);
 }
 
 function createStyles(theme: AppTheme) {
@@ -839,6 +1006,49 @@ modalCard: {
     color: theme.colors.text,
     fontWeight: "900",
     fontSize: 16,
+  },
+
+  modalSubtitle: {
+    color: theme.colors.textDim,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+
+  themeOptions: {
+    gap: 10,
+  },
+
+  themeOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border2,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: theme.colors.surface2,
+  },
+
+  themeOptionSelected: {
+    borderColor: theme.colors.accentBorder,
+    backgroundColor: theme.colors.accentSoft,
+  },
+
+  themeOptionCopy: {
+    flex: 1,
+    gap: 4,
+  },
+
+  themeOptionLabel: {
+    color: theme.colors.text,
+    fontWeight: "900",
+  },
+
+  themeOptionDesc: {
+    color: theme.colors.textDim,
+    fontSize: 12,
   },
 
   modalBtns: {

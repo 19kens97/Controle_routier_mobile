@@ -45,6 +45,7 @@ export const Fonts = Platform.select({
 
 export type ThemeMode = "SYSTEM" | "LIGHT" | "DARK";
 export type ResolvedTheme = ThemeMode;
+export type ThemeTextSize = "SMALL" | "NORMAL" | "LARGE";
 
 type ThemeColors = {
   bg0: string;
@@ -86,6 +87,8 @@ export type AppTheme = {
     small: number;
   };
 };
+
+type ThemeScales = Omit<AppTheme, "colors">;
 
 const LIGHT_BG_0 = "#FFF4E8";
 const LIGHT_BG_1 = "#FFE1C2";
@@ -183,15 +186,7 @@ const PALETTES: Record<ThemeMode, ThemeColors> = {
   SYSTEM: SYSTEM_COLORS,
 };
 
-export const tabBarColors = {
-  background: DARK_COLORS.surface,
-  border: DARK_COLORS.border2,
-  active: DARK_COLORS.accent,
-  inactive: DARK_COLORS.textDim,
-} as const;
-
-export const theme: AppTheme = {
-  colors: { ...DARK_COLORS },
+const THEME_SCALES: ThemeScales = {
   radius: {
     xl: 22,
     lg: 18,
@@ -212,6 +207,40 @@ export const theme: AppTheme = {
     small: 12,
   },
 };
+
+function getFontScale(size: ThemeTextSize) {
+  return size === "SMALL" ? 0.92 : size === "LARGE" ? 1.12 : 1;
+}
+
+export function createAppTheme(
+  resolved: ResolvedTheme,
+  textSize: ThemeTextSize = "NORMAL"
+): AppTheme {
+  const scale = getFontScale(textSize);
+
+  return {
+    ...THEME_SCALES,
+    colors: { ...PALETTES[resolved] },
+    font: {
+      h1: Math.round(THEME_SCALES.font.h1 * scale),
+      h2: Math.round(THEME_SCALES.font.h2 * scale),
+      body: Math.round(THEME_SCALES.font.body * scale),
+      small: Math.round(THEME_SCALES.font.small * scale),
+    },
+  };
+}
+
+export function getTabBarColors(resolved: ResolvedTheme) {
+  const colors = PALETTES[resolved];
+  return {
+    background: colors.surface,
+    border: colors.border2,
+    active: colors.accent,
+    inactive: colors.textDim,
+  } as const;
+}
+
+export const theme: AppTheme = createAppTheme("DARK");
 
 export function resolveTheme(mode: ThemeMode): ResolvedTheme {
   return mode;

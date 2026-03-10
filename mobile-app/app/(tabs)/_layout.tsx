@@ -1,9 +1,14 @@
-﻿import React from "react";
+import React from "react";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { tabBarColors } from "../../constants/theme";
+
+import { getTabBarColors } from "../../constants/theme";
+import { useAppTheme } from "../../src/providers/theme.provider";
 
 export default function TabsLayout() {
+  const { resolvedTheme } = useAppTheme();
+  const tabBarColors = getTabBarColors(resolvedTheme);
+
   return (
     <Tabs
       screenOptions={{
@@ -85,8 +90,6 @@ export default function TabsLayout() {
           ),
         }}
       />
-
     </Tabs>
   );
 }
-
