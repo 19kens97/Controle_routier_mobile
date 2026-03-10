@@ -1,8 +1,8 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { StyleSheet, ViewStyle } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { theme } from "../constants/theme";
+import { useAppTheme } from "../src/providers/theme.provider";
 
 type Props = {
   children: React.ReactNode;
@@ -15,6 +15,9 @@ export default function Screen({
   style,
   edges = ["top", "left", "right"],
 }: Props) {
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(), []);
+
   return (
     <LinearGradient
       colors={[theme.colors.bg0, theme.colors.bg1, theme.colors.bg2]}
@@ -29,7 +32,9 @@ export default function Screen({
   );
 }
 
-const styles = StyleSheet.create({
-  gradient: { flex: 1 },
-  safe: { flex: 1 },
-});
+function createStyles() {
+  return StyleSheet.create({
+    gradient: { flex: 1 },
+    safe: { flex: 1 },
+  });
+}

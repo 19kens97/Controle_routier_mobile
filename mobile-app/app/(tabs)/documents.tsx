@@ -11,7 +11,8 @@ import {
 } from "react-native";
 
 import Screen from "../../components/screen";
-import { theme } from "../../constants/theme";
+import { AppTheme } from "../../constants/theme";
+import { useAppTheme } from "../../src/providers/theme.provider";
 import {
   DocumentType,
   getVehicleRegistrationByCode,
@@ -70,6 +71,8 @@ function prettyKey(key: string) {
 }
 
 export default function DocumentsScreen() {
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [docType, setDocType] = useState<DocumentType>("DRIVER_LICENSE");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
@@ -254,7 +257,8 @@ export default function DocumentsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
   content: {
     paddingHorizontal: theme.spacing.md,
     paddingTop: theme.spacing.lg,
@@ -337,4 +341,5 @@ const styles = StyleSheet.create({
   },
   historyLeft: { color: theme.colors.text, fontWeight: "900" },
   historyRight: { color: theme.colors.textDim, fontWeight: "800" },
-});
+  });
+}

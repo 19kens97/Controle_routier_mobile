@@ -1,55 +1,148 @@
 import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Image,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { router } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 
 import Screen from "../components/screen";
-import { theme } from "../constants/theme";
-import { scanPlateWithOcr } from "../src/api/vehicles.api";
-
-type ScanResult = {
-  plate_number: string;
-  confidence: number;
-  vehicle_found: boolean;
-  vehicle: Record<string, unknown> | null;
-  mode: string;
-};
+import { AppTheme } from "../constants/theme";
+import { useAppTheme } from "../src/providers/theme.provider";
+import { createPageStyles } from "../src/ui/page-styles";
+import { OcrEngine, scanVehiclePlate } from "../src/api/vehicles.api";
 
 export default function ScanPlateScreen() {
-  const [rawText, setRawText] = useState("");
+  const { theme } = useAppTheme();
+  const pageStyles = useMemo(() => createPageStyles(theme), [theme]);
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [engine, setEngine] = useState<OcrEngine>("ai");
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [result, setResult] = useState<ScanResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{
+    plate: string | null;
+    confidence: number;
+    candidates: string[];
+    raw_text: string;
+    is_reliable: boolean;
+  } | null>(null);
 
-  const canScan = useMemo(() => rawText.trim().length > 3 && !loading, [rawText, loading]);
+  const confidenceLabel = useMemo(() => {
+    if (!result) return "";
+    return `${Math.round(result.confidence * 100)}%`;
+  }, [result]);
 
-  async function onScan() {
-    if (!canScan) return;
+  const promptOpenSettings = () => {
+    Alert.alert(
+      "Acces camera requis",
+      "Pour scanner une plaque, active la camera dans les parametres de l'appareil.",
+      [
+        { text: "Annuler", style: "cancel" },
+        { text: "Ouvrir parametres", onPress: () => Linking.openSettings() },
+      ]
+    );
+  };
+
+  const promptCameraConsent = () =>
+    new Promise<"continue" | "settings" | "cancel">((resolve) => {
+      Alert.alert(
+        "Autorisation camera",
+        "Avant de prendre une photo, accepte l'acces a la camera. Tu peux aussi ouvrir les parametres de l'appareil.",
+        [
+          { text: "Annuler", style: "cancel", onPress: () => resolve("cancel") },
+          { text: "Ouvrir parametres", onPress: () => resolve("settings") },
+          { text: "Continuer", onPress: () => resolve("continue") },
+        ],
+        { cancelable: true, onDismiss: () => resolve("cancel") }
+      );
+    });
+
+  const pickFromLibrary = async () => {
+    setError(null);
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setError("Permission galerie refusee.");
+      return;
+    }
+
+    const selected = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.9,
+      allowsEditing: true,
+    });
+
+    if (!selected.canceled && selected.assets.length > 0) {
+      setImageUri(selected.assets[0].uri);
+      setResult(null);
+    }
+  };
+
+  const pickFromCamera = async () => {
+    setError(null);
+
+    const consent = await promptCameraConsent();
+    if (consent === "cancel") return;
+    if (consent === "settings") {
+      await Linking.openSettings();
+      return;
+    }
+
+    const currentPermission = await ImagePicker.getCameraPermissionsAsync();
+    let permissionGranted = currentPermission.granted;
+    let canAskAgain = currentPermission.canAskAgain;
+
+    if (!permissionGranted && canAskAgain) {
+      const requestedPermission = await ImagePicker.requestCameraPermissionsAsync();
+      permissionGranted = requestedPermission.granted;
+      canAskAgain = requestedPermission.canAskAgain;
+    }
+
+    if (!permissionGranted) {
+      setError("L'acces a la camera est requis pour prendre une photo de la plaque.");
+      promptOpenSettings();
+      return;
+    }
+
+    const captured = await ImagePicker.launchCameraAsync({
+      quality: 0.9,
+      allowsEditing: true,
+    });
+
+    if (!captured.canceled && captured.assets.length > 0) {
+      setImageUri(captured.assets[0].uri);
+      setResult(null);
+    }
+  };
+
+  const runScan = async () => {
+    if (!imageUri) {
+      setError("Selectionne d'abord une image.");
+      return;
+    }
 
     setLoading(true);
-    setErrorMsg(null);
+    setError(null);
     setResult(null);
 
     try {
-      const response = await scanPlateWithOcr(rawText.trim());
+      const response = await scanVehiclePlate(imageUri, engine);
       setResult(response.data);
-    } catch (error: any) {
-      const backendMessage =
-        error?.response?.data?.message ||
-        error?.response?.data?.detail ||
-        "Le scan OCR a échoué.";
-      setErrorMsg(String(backendMessage));
+    } catch (err: any) {
+      const apiMessage = err?.response?.data?.message;
+      setError(apiMessage || "Echec du scan OCR.");
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   return (
     <Screen>
@@ -59,48 +152,71 @@ export default function ScanPlateScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Scanner une plaque (OCR)</Text>
-        <Text style={styles.subtitle}>
-          MVP test: collez le texte OCR brut, puis validez la plaque détectée.
+        <Text style={pageStyles.title}>Scanner une plaque</Text>
+        <Text style={pageStyles.subtitle}>
+          Charge une photo ou prends une image, puis envoie-la au backend OCR.
         </Text>
 
-        <View style={styles.card}>
-          <Text style={styles.label}>Texte OCR brut</Text>
-          <TextInput
-            value={rawText}
-            onChangeText={setRawText}
-            placeholder="Ex: Véhicule détecté AB123CD sur axe principal..."
-            placeholderTextColor={theme.colors.textDim}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-            style={styles.input}
-          />
+        <View style={pageStyles.card}>
+          <View style={pageStyles.cardHeader}>
+            <Text style={pageStyles.cardTitle}>Moteur OCR</Text>
+          </View>
+          <View style={styles.switchRow}>
+            <Pressable
+              style={[styles.engineBtn, engine === "ai" && styles.engineBtnActive]}
+              onPress={() => setEngine("ai")}
+            >
+              <Text style={styles.engineText}>AI (YOLO + Paddle)</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.engineBtn, engine === "tesseract" && styles.engineBtnActive]}
+              onPress={() => setEngine("tesseract")}
+            >
+              <Text style={styles.engineText}>Tesseract</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.actionRow}>
+            <Pressable style={styles.actionBtn} onPress={pickFromLibrary}>
+              <Text style={styles.actionBtnText}>Choisir photo</Text>
+            </Pressable>
+            <Pressable style={styles.actionBtn} onPress={pickFromCamera}>
+              <Text style={styles.actionBtnText}>Prendre photo</Text>
+            </Pressable>
+          </View>
+
+          {imageUri ? <Image source={{ uri: imageUri }} style={styles.preview} /> : null}
 
           <Pressable
-            onPress={onScan}
-            disabled={!canScan}
-            style={({ pressed }) => [
-              styles.button,
-              !canScan && { opacity: 0.5 },
-              pressed && canScan && { opacity: 0.9 },
-            ]}
+            style={[pageStyles.primaryButton, loading && { opacity: 0.7 }]}
+            onPress={runScan}
+            disabled={loading}
           >
-            {loading ? <ActivityIndicator /> : <Text style={styles.buttonText}>Lancer OCR</Text>}
+            {loading ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color="#000" size="small" />
+                <Text style={styles.scanBtnText}>Scan en cours...</Text>
+              </View>
+            ) : (
+              <Text style={styles.scanBtnText}>Lancer le scan</Text>
+            )}
           </Pressable>
 
-          {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}
-        </View>
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-        {result ? (
-          <View style={styles.card}>
-            <Text style={styles.label}>Résultat</Text>
-            <Row label="Plaque détectée" value={result.plate_number} />
-            <Row label="Confiance" value={`${Math.round(result.confidence * 100)}%`} />
-            <Row label="Véhicule trouvé" value={result.vehicle_found ? "Oui" : "Non"} />
-            <Row label="Mode" value={result.mode} />
-          </View>
-        ) : null}
+          {result ? (
+            <View style={styles.resultBox}>
+              <Text style={styles.resultTitle}>Resultat</Text>
+              <Text style={styles.value}>Plaque: {result.plate || "Non detectee"}</Text>
+              <Text style={styles.value}>Confiance: {confidenceLabel}</Text>
+              <Text style={styles.value}>Fiable: {result.is_reliable ? "Oui" : "Non"}</Text>
+              <Text style={styles.value}>
+                Candidats: {result.candidates.length ? result.candidates.join(", ") : "-"}
+              </Text>
+              <Text style={styles.value}>Texte brut: {result.raw_text || "-"}</Text>
+            </View>
+          ) : null}
+        </View>
 
         <Pressable style={styles.linkBtn} onPress={() => router.back()}>
           <Text style={styles.linkText}>Retour accueil</Text>
@@ -110,68 +226,90 @@ export default function ScanPlateScreen() {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.k}>{label}</Text>
-      <Text style={styles.v}>{value}</Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
   content: {
     paddingHorizontal: theme.spacing.md,
     paddingTop: theme.spacing.lg,
     paddingBottom: theme.spacing.lg,
     gap: 12,
   },
-  title: { color: theme.colors.text, fontSize: 22, fontWeight: "900" },
-  subtitle: { color: theme.colors.textDim, marginTop: -4 },
-  card: {
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.md,
-    backgroundColor: theme.colors.surface,
+  switchRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  engineBtn: {
+    flex: 1,
+    borderRadius: theme.radius.md,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    gap: 10,
+    backgroundColor: "rgba(255,255,255,0.03)",
+    paddingVertical: 8,
+    paddingHorizontal: 10,
   },
-  label: { color: theme.colors.text, fontSize: 14, fontWeight: "900" },
-  input: {
-    minHeight: 110,
+  engineBtnActive: {
+    borderColor: theme.colors.accentBorder,
+    backgroundColor: theme.colors.accentSoft,
+  },
+  engineText: {
+    color: theme.colors.text,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  actionRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  actionBtn: {
+    flex: 1,
+    borderRadius: theme.radius.md,
     borderWidth: 1,
     borderColor: theme.colors.border2,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: theme.colors.text,
     backgroundColor: theme.colors.surface2,
-    fontWeight: "700",
-  },
-  button: {
-    borderRadius: theme.radius.md,
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: "center",
-    backgroundColor: theme.colors.accentSoft,
+  },
+  actionBtnText: {
+    color: theme.colors.text,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  preview: {
+    width: "100%",
+    height: 180,
+    borderRadius: theme.radius.md,
     borderWidth: 1,
-    borderColor: theme.colors.accentBorder,
+    borderColor: theme.colors.border2,
   },
-  buttonText: { color: theme.colors.text, fontWeight: "900" },
-  error: { color: theme.colors.danger, fontWeight: "800" },
-  row: {
+  scanBtnText: {
+    color: theme.colors.text,
+    fontWeight: "900",
+  },
+  loadingRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 10,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border2,
-    paddingTop: 10,
+    alignItems: "center",
+    gap: 8,
   },
-  k: { color: theme.colors.textMuted, fontWeight: "800" },
-  v: { color: theme.colors.text, fontWeight: "900" },
+  value: { color: theme.colors.textMuted, fontSize: 13, fontWeight: "700" },
+  errorText: { color: theme.colors.danger, fontSize: 12, fontWeight: "700" },
+  resultBox: {
+    gap: 6,
+    borderRadius: theme.radius.md,
+    padding: theme.spacing.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.border2,
+    backgroundColor: "rgba(255,255,255,0.03)",
+  },
+  resultTitle: {
+    color: theme.colors.text,
+    fontSize: 13,
+    fontWeight: "900",
+  },
   linkBtn: {
     alignSelf: "center",
     paddingVertical: 6,
     paddingHorizontal: 8,
   },
   linkText: { color: "rgba(255,215,0,0.9)", fontWeight: "900" },
-});
+  });
+}

@@ -9,9 +9,17 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Cette application utilise la camera pour scanner les plaques.",
+        "NSPhotoLibraryUsageDescription": "Cette application utilise la galerie pour selectionner une photo de plaque."
+      }
     },
     "android": {
+      "usesCleartextTraffic": true,
+      "permissions": [
+        "android.permission.CAMERA"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -37,6 +45,13 @@
           "dark": {
             "backgroundColor": "#000000"
           }
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Autoriser l'application a acceder a la camera pour scanner les plaques.",
+          "photosPermission": "Autoriser l'application a acceder a la galerie pour selectionner les photos de plaques."
         }
       ],
       "expo-secure-store"

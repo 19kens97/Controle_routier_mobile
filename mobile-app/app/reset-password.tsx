@@ -19,9 +19,14 @@ import { useLocalSearchParams, router } from "expo-router";
 
 import api from "../src/api/api";
 import Screen from "../components/screen";
-import { theme } from "../constants/theme";
+import { AppTheme } from "../constants/theme";
+import { useAppTheme } from "../src/providers/theme.provider";
+import { createPageStyles } from "../src/ui/page-styles";
 
 export default function ResetPasswordScreen() {
+  const { theme } = useAppTheme();
+  const pageStyles = useMemo(() => createPageStyles(theme), [theme]);
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const { uid, token } = useLocalSearchParams<{ uid?: string; token?: string }>();
 
   const [password, setPassword] = useState("");
@@ -92,8 +97,8 @@ export default function ResetPasswordScreen() {
           </View>
 
           {/* Card */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Nouveau mot de passe</Text>
+          <View style={pageStyles.card}>
+            <Text style={pageStyles.cardTitle}>Nouveau mot de passe</Text>
 
             {/* Indication si lien incomplet */}
             {(!uid || !token) && (
@@ -153,12 +158,12 @@ export default function ResetPasswordScreen() {
               onPress={submit}
               disabled={!canSubmit}
               style={({ pressed }) => [
-                styles.button,
+                pageStyles.primaryButton,
                 !canSubmit && styles.buttonDisabled,
                 pressed && canSubmit && { transform: [{ scale: 0.99 }] },
               ]}
             >
-              {loading ? <ActivityIndicator /> : <Text style={styles.buttonText}>Valider</Text>}
+              {loading ? <ActivityIndicator /> : <Text style={pageStyles.primaryButtonText}>Valider</Text>}
             </Pressable>
 
             <Pressable
@@ -174,23 +179,14 @@ export default function ResetPasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
   container: { flex: 1, paddingHorizontal: theme.spacing.lg, justifyContent: "center" },
 
   header: { alignItems: "center", marginBottom: theme.spacing.lg },
   logo: { width: 62, height: 62, marginBottom: 10 },
   brand: { color: theme.colors.text, fontSize: 26, fontWeight: "800" },
-  sub: { marginTop: 6, color: theme.colors.textMuted, fontSize: 13 },
-
-  card: {
-    borderRadius: theme.radius.xl,
-    padding: theme.spacing.lg,
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  cardTitle: { color: theme.colors.text, fontSize: 18, fontWeight: "700", marginBottom: 12 },
-
+  sub: { marginTop: 6, color: theme.colors.textDim, fontSize: 13, fontWeight: "700" },
   warn: { color: "rgba(255,215,0,0.85)", fontSize: 12, marginBottom: 10, fontWeight: "600" },
 
   inputWrap: {
@@ -211,18 +207,9 @@ const styles = StyleSheet.create({
 
   error: { color: "#FFB4B4", fontSize: 12, marginBottom: 10 },
 
-  button: {
-    height: 50,
-    borderRadius: theme.radius.md,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255, 215, 0, 0.22)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 215, 0, 0.35)",
-  },
   buttonDisabled: { opacity: 0.45 },
-  buttonText: { color: theme.colors.text, fontSize: 15, fontWeight: "800" },
 
   back: { alignSelf: "center", marginTop: 14 },
   backText: { color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: "700" },
-});
+  });
+}

@@ -1,4 +1,4 @@
-// app/(tabs)/settings.tsx
+﻿// app/(tabs)/settings.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -19,7 +19,8 @@ import * as Application from "expo-application";
 import { BlurView } from "expo-blur";
 
 import Screen from "../../components/screen";
-import { theme } from "../../constants/theme";
+import { AppTheme, ThemeMode } from "../../constants/theme";
+import { useAppTheme } from "../../src/providers/theme.provider";
 import { getUserProfile, UserProfile } from "../../src/api/users.api";
 import { changePassword, logout } from "../../src/api/auth.api";
 import { API_BASE_URL, IS_FALLBACK_API_BASE_URL } from "../../src/config/api";
@@ -29,7 +30,6 @@ import {
   resetSettings,
   saveSettings,
   TextSize,
-  ThemeMode,
 } from "../../src/storage/settings.storage";
 
 function roleLabel(role?: string) {
@@ -49,11 +49,14 @@ function maskValue(v: string, enabled: boolean) {
 }
 
 export default function SettingsScreen() {
+  const { theme, setThemeMode } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
 
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loadingSettings, setLoadingSettings] = useState(true);
+  const [prefSaveState, setPrefSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   const [syncState, setSyncState] = useState({ online: true, pending: 0 }); // V1 local
 
@@ -97,9 +100,26 @@ export default function SettingsScreen() {
 
   async function updateSettings(patch: Partial<AppSettings>) {
     if (!settings) return;
+    const prev = settings;
     const next = { ...settings, ...patch };
     setSettings(next);
-    await saveSettings(next);
+    setPrefSaveState("saving");
+    try {
+      await saveSettings(next);
+      setPrefSaveState("saved");
+      setTimeout(() => setPrefSaveState("idle"), 1200);
+    } catch {
+      setSettings(prev);
+      setPrefSaveState("error");
+      Alert.alert("Erreur", "Impossible d'enregistrer la préférence localement.");
+    }
+  }
+
+  async function onCycleTheme() {
+    if (!settings) return;
+    const next = getNextTheme(settings.themeMode);
+    await updateSettings({ themeMode: next });
+    setThemeMode(next);
   }
 
   const appVersion = useMemo(() => {
@@ -236,11 +256,11 @@ export default function SettingsScreen() {
             <Ionicons name="person-circle-outline" size={20} color={theme.colors.text} />
           </View>
 
-          <Row label="Nom" value={(profile?.first_name || profile?.last_name) ? `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim() : "-"} />
-          <Row label="Username" value={profile?.username ?? "-"} />
-          <Row label="Rôle" value={roleLabel(profile?.role)} />
+          <Row label="Nom" value={(profile?.first_name || profile?.last_name) ? `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim() : "-"} styles={styles} />
+          <Row label="Username" value={profile?.username ?? "-"} styles={styles} />
+          <Row label="Rôle" value={roleLabel(profile?.role)} styles={styles} />
 
-          <Divider />
+          <Divider theme={theme} />
 
           <Pressable style={styles.actionRow} onPress={() => setPwOpen(true)}>
             <Text style={styles.actionText}>Changer le mot de passe</Text>
@@ -265,6 +285,15 @@ export default function SettingsScreen() {
             <Text style={styles.cardTitle}>Préférences</Text>
             <Ionicons name="options-outline" size={20} color={theme.colors.text} />
           </View>
+          <Text style={styles.prefStateText}>
+            {prefSaveState === "saving"
+              ? "Enregistrement local..."
+              : prefSaveState === "saved"
+                ? "Préférence enregistrée"
+                : prefSaveState === "error"
+                  ? "Erreur d'enregistrement local"
+                  : "Stockage local (sans backend)"}
+          </Text>
 
           <SelectRow
             label="Thème"
@@ -275,7 +304,9 @@ export default function SettingsScreen() {
                   ? "Sombre"
                   : "Clair"
             }
-            onPress={() => cycleTheme(settings.themeMode, (v) => updateSettings({ themeMode: v }))}
+            onPress={onCycleTheme}
+            styles={styles}
+            theme={theme}
           />
 
           <SelectRow
@@ -284,6 +315,8 @@ export default function SettingsScreen() {
             onPress={() =>
               updateSettings({ language: settings.language === "FR" ? "HT" : "FR" })
             }
+            styles={styles}
+            theme={theme}
           />
 
           <SelectRow
@@ -296,6 +329,8 @@ export default function SettingsScreen() {
                   : "Normale"
             }
             onPress={() => cycleTextSize(settings.textSize, (v) => updateSettings({ textSize: v }))}
+            styles={styles}
+            theme={theme}
           />
         </View>
 
@@ -311,6 +346,7 @@ export default function SettingsScreen() {
             desc="Autoriser la saisie sans réseau (sync plus tard)."
             value={settings.offlineMode}
             onValueChange={(v) => updateSettings({ offlineMode: v })}
+            styles={styles}
           />
 
           <SelectRow
@@ -321,9 +357,11 @@ export default function SettingsScreen() {
                 syncPolicy: settings.syncPolicy === "ALWAYS" ? "WIFI_ONLY" : "ALWAYS",
               })
             }
+            styles={styles}
+            theme={theme}
           />
 
-          <Divider />
+          <Divider theme={theme} />
 
           <View style={styles.kvLine}>
             <Text style={styles.kSmall}>Statut</Text>
@@ -356,18 +394,21 @@ export default function SettingsScreen() {
             desc="Véhicule recherché, alerte importante, etc."
             value={settings.notifPriorityAlerts}
             onValueChange={(v) => updateSettings({ notifPriorityAlerts: v })}
+            styles={styles}
           />
           <ToggleRow
             label="Documents expirés"
             desc="Avertissements assurance / carte / permis expirés."
             value={settings.notifExpiredDocs}
             onValueChange={(v) => updateSettings({ notifExpiredDocs: v })}
+            styles={styles}
           />
           <ToggleRow
             label="Rappel fin de service"
             desc="Petit rappel en fin de journée (optionnel)."
             value={settings.notifEndShift}
             onValueChange={(v) => updateSettings({ notifEndShift: v })}
+            styles={styles}
           />
         </View>
 
@@ -383,6 +424,7 @@ export default function SettingsScreen() {
             desc="Masquer une partie des numéros à l’écran."
             value={settings.maskSensitive}
             onValueChange={(v) => updateSettings({ maskSensitive: v })}
+            styles={styles}
           />
 
           <View style={styles.kvLine}>
@@ -392,7 +434,7 @@ export default function SettingsScreen() {
             </Text>
           </View>
 
-          <Divider />
+          <Divider theme={theme} />
 
           <Pressable
             style={styles.actionRow}
@@ -415,14 +457,15 @@ export default function SettingsScreen() {
             <Ionicons name="information-circle-outline" size={20} color={theme.colors.text} />
           </View>
 
-          <Row label="Version" value={appVersion} />
-          <Row label="Environnement" value="DEV" />
+          <Row label="Version" value={appVersion} styles={styles} />
+          <Row label="Environnement" value="DEV" styles={styles} />
           <Row
             label="Serveur (baseURL)"
             value={`${API_BASE_URL}${IS_FALLBACK_API_BASE_URL ? " (fallback)" : ""}`}
+            styles={styles}
           />
 
-          <Divider />
+          <Divider theme={theme} />
 
           <Pressable
             style={styles.actionRow}
@@ -531,11 +574,19 @@ export default function SettingsScreen() {
 
 /* -------- UI Helpers -------- */
 
-function Divider() {
+function Divider({ theme }: { theme: AppTheme }) {
   return <View style={{ height: 1, backgroundColor: theme.colors.border2, opacity: 0.8 }} />;
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({
+  label,
+  value,
+  styles,
+}: {
+  label: string;
+  value: string;
+  styles: ReturnType<typeof createStyles>;
+}) {
   return (
     <View style={styles.kvLine}>
       <Text style={styles.kSmall}>{label}</Text>
@@ -549,11 +600,13 @@ function ToggleRow({
   desc,
   value,
   onValueChange,
+  styles,
 }: {
   label: string;
   desc?: string;
   value: boolean;
   onValueChange: (v: boolean) => void;
+  styles: ReturnType<typeof createStyles>;
 }) {
   return (
     <View style={styles.toggleRow}>
@@ -570,10 +623,14 @@ function SelectRow({
   label,
   value,
   onPress,
+  styles,
+  theme,
 }: {
   label: string;
   value: string;
   onPress: () => void;
+  styles: ReturnType<typeof createStyles>;
+  theme: AppTheme;
 }) {
   return (
     <Pressable style={styles.selectRow} onPress={onPress}>
@@ -586,9 +643,8 @@ function SelectRow({
   );
 }
 
-function cycleTheme(cur: ThemeMode, set: (v: ThemeMode) => void) {
-  const next: ThemeMode = cur === "SYSTEM" ? "DARK" : cur === "DARK" ? "LIGHT" : "SYSTEM";
-  set(next);
+function getNextTheme(cur: ThemeMode): ThemeMode {
+  return cur === "SYSTEM" ? "DARK" : cur === "DARK" ? "LIGHT" : "SYSTEM";
 }
 
 function cycleTextSize(cur: TextSize, set: (v: TextSize) => void) {
@@ -596,7 +652,8 @@ function cycleTextSize(cur: TextSize, set: (v: TextSize) => void) {
   set(next);
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
   content: {
     paddingHorizontal: theme.spacing.md,
     paddingTop: theme.spacing.lg,
@@ -629,6 +686,12 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontWeight: "900",
     fontSize: 14,
+  },
+
+  prefStateText: {
+    color: theme.colors.textDim,
+    fontSize: 12,
+    fontWeight: "700",
   },
 
   center: {
@@ -823,4 +886,9 @@ modalCard: {
     color: theme.colors.danger,
     fontWeight: "800",
   },
-});
+  });
+}
+
+
+
+

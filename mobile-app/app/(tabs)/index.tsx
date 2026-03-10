@@ -4,7 +4,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import Screen from "../../components/screen";
-import { theme } from "../../constants/theme";
+import { AppTheme } from "../../constants/theme";
+import { useAppTheme } from "../../src/providers/theme.provider";
+import { createPageStyles } from "../../src/ui/page-styles";
 import { getUserProfile, UserProfile } from "../../src/api/users.api";
 
 type AlertItem = {
@@ -22,6 +24,9 @@ type ActivityItem = {
 };
 
 export default function HomeDashboard() {
+  const { theme } = useAppTheme();
+  const pageStyles = useMemo(() => createPageStyles(theme), [theme]);
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
 
@@ -128,8 +133,8 @@ export default function HomeDashboard() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.hi}>Bonjour, {loadingProfile ? "..." : userName}</Text>
-            <Text style={styles.role}>{roleLabel}</Text>
+            <Text style={pageStyles.title}>Bonjour, {loadingProfile ? "..." : userName}</Text>
+            <Text style={pageStyles.subtitle}>{roleLabel}</Text>
           </View>
 
           <View style={styles.syncBadge}>
@@ -150,9 +155,9 @@ export default function HomeDashboard() {
         </View>
 
         {/* Alerts */}
-        <View style={styles.alertCard}>
-          <View style={styles.alertHeader}>
-            <Text style={styles.alertTitle}>Alertes prioritaires</Text>
+        <View style={pageStyles.card}>
+          <View style={pageStyles.cardHeader}>
+            <Text style={pageStyles.cardTitle}>Alertes prioritaires</Text>
             <Pressable onPress={() => router.push("/modal")}>
               <Text style={styles.link}>Tout voir</Text>
             </Pressable>
@@ -184,48 +189,60 @@ export default function HomeDashboard() {
           <QuickAction
             icon="scan-outline"
             title="Scanner plaque"
-            subtitle="OCR + cadrage"
+            subtitle="Module en reimplementation"
             onPress={() => router.push("/scan-plate" as any)}
+            theme={theme}
+            styles={styles}
           />
           <QuickAction
             icon="search-outline"
             title="Recherche"
             subtitle="Manuelle"
-            onPress={() => router.push("/modal")} // TODO: /search
+            onPress={() => router.push("/(tabs)/documents")}
+            theme={theme}
+            styles={styles}
           />
           <QuickAction
             icon="time-outline"
             title="Derniers scans"
             subtitle="Historique local"
             onPress={() => router.push("/modal")} // TODO: /history/scans
+            theme={theme}
+            styles={styles}
           />
           <QuickAction
             icon="alert-circle-outline"
             title="Verbaliser"
             subtitle="Créer un PV"
             onPress={() => router.push("/modal")} // TODO: /verbalisation/new
+            theme={theme}
+            styles={styles}
           />
         </View>
 
         {/* Stats */}
-        <View style={styles.statsCard}>
-          <Text style={styles.statsTitle}>Statistiques personnelles</Text>
+        <View style={pageStyles.card}>
+          <Text style={pageStyles.cardTitle}>Statistiques personnelles</Text>
           <View style={styles.statsRow}>
             <StatBox
               label="Contrôles"
               value={String(stats.controles)}
               icon="clipboard-outline"
+              theme={theme}
+              styles={styles}
             />
             <StatBox
               label="Verbalisations"
               value={String(stats.verbalisations)}
               icon="document-text-outline"
+              theme={theme}
+              styles={styles}
             />
           </View>
         </View>
 
         {/* Activity */}
-        <View style={styles.listHeader}>
+        <View style={pageStyles.cardHeader}>
           <Text style={styles.listTitle}>Activité récente</Text>
           <Pressable onPress={() => router.push("/(tabs)/profile")}>
             <Text style={styles.link}>Profil</Text>
@@ -233,7 +250,7 @@ export default function HomeDashboard() {
         </View>
 
         {activity.map((item) => (
-          <ActivityRow key={item.id} item={item} />
+          <ActivityRow key={item.id} item={item} styles={styles} theme={theme} />
         ))}
       </ScrollView>
     </Screen>
@@ -245,11 +262,15 @@ function QuickAction({
   title,
   subtitle,
   onPress,
+  theme,
+  styles,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle: string;
   onPress: () => void;
+  theme: AppTheme;
+  styles: ReturnType<typeof createStyles>;
 }) {
   return (
     <Pressable
@@ -269,10 +290,14 @@ function StatBox({
   label,
   value,
   icon,
+  theme,
+  styles,
 }: {
   label: string;
   value: string;
   icon: keyof typeof Ionicons.glyphMap;
+  theme: AppTheme;
+  styles: ReturnType<typeof createStyles>;
 }) {
   return (
     <View style={styles.statBox}>
@@ -283,7 +308,15 @@ function StatBox({
   );
 }
 
-function ActivityRow({ item }: { item: ActivityItem }) {
+function ActivityRow({
+  item,
+  styles,
+  theme,
+}: {
+  item: ActivityItem;
+  styles: ReturnType<typeof createStyles>;
+  theme: AppTheme;
+}) {
   const badge =
     item.status === "SYNCED"
       ? { text: "Sync", icon: "checkmark-circle-outline" as const }
@@ -305,7 +338,8 @@ function ActivityRow({ item }: { item: ActivityItem }) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: theme.spacing.md,
@@ -475,4 +509,5 @@ const styles = StyleSheet.create({
     fontSize: theme.font.small,
     fontWeight: "900",
   },
-});
+  });
+}

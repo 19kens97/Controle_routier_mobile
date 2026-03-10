@@ -18,9 +18,14 @@ import { router } from "expo-router";
 import api from "../src/api/api";
 import { saveTokens } from "../src/utils/auth";
 import Screen from "../components/screen";
-import { theme } from "../constants/theme";
+import { AppTheme } from "../constants/theme";
+import { useAppTheme } from "../src/providers/theme.provider";
+import { createPageStyles } from "../src/ui/page-styles";
 
 export default function Login() {
+  const { theme } = useAppTheme();
+  const pageStyles = useMemo(() => createPageStyles(theme), [theme]);
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [hidePass, setHidePass] = useState(true);
@@ -87,8 +92,8 @@ export default function Login() {
           </View>
 
           {/* Card */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Se connecter</Text>
+          <View style={pageStyles.card}>
+            <Text style={pageStyles.cardTitle}>Se connecter</Text>
 
             <View style={styles.inputWrap}>
               <Ionicons name="person-outline" size={18} color="rgba(255,255,255,0.7)" />
@@ -137,12 +142,12 @@ export default function Login() {
               onPress={handleLogin}
               disabled={!canSubmit}
               style={({ pressed }) => [
-                styles.button,
+                pageStyles.primaryButton,
                 !canSubmit && styles.buttonDisabled,
                 pressed && canSubmit && { transform: [{ scale: 0.99 }] },
               ]}
             >
-              {loading ? <ActivityIndicator /> : <Text style={styles.buttonText}>Connexion</Text>}
+              {loading ? <ActivityIndicator /> : <Text style={pageStyles.primaryButtonText}>Connexion</Text>}
             </Pressable>
           </View>
         </KeyboardAvoidingView>
@@ -151,23 +156,14 @@ export default function Login() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
   container: { flex: 1, paddingHorizontal: theme.spacing.lg, justifyContent: "center" },
 
   header: { alignItems: "center", marginBottom: theme.spacing.lg },
   logo: { width: 62, height: 62, marginBottom: 10 },
   brand: { color: theme.colors.text, fontSize: 26, fontWeight: "800" },
-  sub: { marginTop: 6, color: theme.colors.textMuted, fontSize: 13 },
-
-  card: {
-    borderRadius: theme.radius.xl,
-    padding: theme.spacing.lg,
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  cardTitle: { color: theme.colors.text, fontSize: 18, fontWeight: "700", marginBottom: 14 },
-
+  sub: { marginTop: 6, color: theme.colors.textDim, fontSize: 13, fontWeight: "700" },
   inputWrap: {
     flexDirection: "row",
     alignItems: "center",
@@ -187,15 +183,6 @@ const styles = StyleSheet.create({
 
   error: { color: "#FFB4B4", fontSize: 12, marginBottom: 10 },
 
-  button: {
-    height: 50,
-    borderRadius: theme.radius.md,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255, 215, 0, 0.22)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 215, 0, 0.35)",
-  },
   buttonDisabled: { opacity: 0.45 },
-  buttonText: { color: theme.colors.text, fontSize: 15, fontWeight: "800" },
-});
+  });
+}

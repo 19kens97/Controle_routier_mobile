@@ -14,6 +14,19 @@ const ACCESS_KEY = "access_token";
 const REFRESH_KEY = "refresh_token";
 
 api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  const isFormData = typeof FormData !== "undefined" && config.data instanceof FormData;
+  if (isFormData) {
+    // Important for React Native: remove JSON content-type so runtime can set multipart boundary.
+    const headers: any = config.headers;
+    if (typeof headers?.delete === "function") {
+      headers.delete("Content-Type");
+      headers.delete("content-type");
+    } else if (headers) {
+      delete headers["Content-Type"];
+      delete headers["content-type"];
+    }
+  }
+
   const token = await SecureStore.getItemAsync(ACCESS_KEY);
   if (token) {
     config.headers = config.headers ?? {};

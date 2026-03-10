@@ -1,10 +1,21 @@
-import React from "react";
+﻿import React from "react";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { tabBarColors } from "../../constants/theme";
 
 export default function TabsLayout() {
   return (
-    <Tabs screenOptions={{ headerShown: false }}>
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: tabBarColors.background,
+          borderTopColor: tabBarColors.border,
+        },
+        tabBarActiveTintColor: tabBarColors.active,
+        tabBarInactiveTintColor: tabBarColors.inactive,
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
@@ -78,3 +89,4 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+

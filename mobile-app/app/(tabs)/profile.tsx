@@ -12,7 +12,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import Screen from "../../components/screen";
-import { theme } from "../../constants/theme";
+import { AppTheme, theme as themeSingleton } from "../../constants/theme";
+import { useAppTheme } from "../../src/providers/theme.provider";
 import { getUserProfile, updateUserProfile, UserProfile } from "../../src/api/users.api";
 
 type FormState = {
@@ -22,6 +23,8 @@ type FormState = {
 };
 
 export default function ProfileScreen() {
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -173,21 +176,29 @@ export default function ProfileScreen() {
             label="Nom d'utilisateur"
             value={profile?.username ?? (loading ? "..." : "-")}
             icon="person-outline"
+            styles={styles}
+            theme={theme}
           />
           <InfoRow
             label="NIF"
             value={profile?.nif ?? "-"}
             icon="card-outline"
+            styles={styles}
+            theme={theme}
           />
           <InfoRow
             label="Téléphone"
             value={profile?.phone_number ?? "-"}
             icon="call-outline"
+            styles={styles}
+            theme={theme}
           />
           <InfoRow
             label="Date de naissance"
             value={profile?.date_of_birth ?? "-"}
             icon="calendar-outline"
+            styles={styles}
+            theme={theme}
           />
         </View>
 
@@ -222,6 +233,7 @@ export default function ProfileScreen() {
             onChange={(v) => setForm((s) => ({ ...s, last_name: v }))}
             editable={isEditing}
             placeholder="Votre nom"
+            styles={styles}
           />
           <Field
             label="Email"
@@ -281,10 +293,14 @@ function InfoRow({
   label,
   value,
   icon,
+  styles,
+  theme,
 }: {
   label: string;
   value: string;
   icon: keyof typeof Ionicons.glyphMap;
+  styles: ReturnType<typeof createStyles>;
+  theme: AppTheme;
 }) {
   return (
     <View style={styles.infoRow}>
@@ -307,6 +323,7 @@ function Field({
   placeholder,
   keyboardType,
   autoCapitalize,
+  styles,
 }: {
   label: string;
   value: string;
@@ -315,10 +332,12 @@ function Field({
   placeholder?: string;
   keyboardType?: any;
   autoCapitalize?: any;
+  styles?: ReturnType<typeof createStyles>;
 }) {
+  const resolvedStyles = styles ?? createStyles(themeSingleton);
   return (
-    <View style={{ marginTop: theme.spacing.md }}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+    <View style={{ marginTop: themeSingleton.spacing.md }}>
+      <Text style={resolvedStyles.fieldLabel}>{label}</Text>
       <TextInput
         value={value}
         onChangeText={onChange}
@@ -328,7 +347,7 @@ function Field({
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
         style={[
-          styles.input,
+          resolvedStyles.input,
           !editable && { opacity: 0.8 },
         ]}
       />
@@ -336,7 +355,8 @@ function Field({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
   scrollContent: {
     paddingHorizontal: theme.spacing.md,
     paddingTop: theme.spacing.lg,
@@ -535,4 +555,5 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.9)",
     fontWeight: "900",
   },
-});
+  });
+}
