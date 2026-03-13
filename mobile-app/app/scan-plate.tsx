@@ -12,28 +12,34 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
+import * as FileSystem from "expo-file-system/legacy";
 
 import Screen from "../components/screen";
 import { AppTheme } from "../constants/theme";
+import { API_BASE_URL } from "../src/config/api";
 import { useAppTheme } from "../src/providers/theme.provider";
 import { createPageStyles } from "../src/ui/page-styles";
 import { OcrEngine, scanVehiclePlate } from "../src/api/vehicles.api";
+
+type ScanResult = {
+  plate: string | null;
+  confidence: number;
+  candidates: string[];
+  raw_text: string;
+  is_reliable: boolean;
+};
 
 export default function ScanPlateScreen() {
   const { theme } = useAppTheme();
   const pageStyles = useMemo(() => createPageStyles(theme), [theme]);
   const styles = useMemo(() => createStyles(theme), [theme]);
+
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [engine, setEngine] = useState<OcrEngine>("ai");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{
-    plate: string | null;
-    confidence: number;
-    candidates: string[];
-    raw_text: string;
-    is_reliable: boolean;
-  } | null>(null);
+  const [result, setResult] = useState<ScanResult | null>(null);
 
   const confidenceLabel = useMemo(() => {
     if (!result) return "";
@@ -65,61 +71,108 @@ export default function ScanPlateScreen() {
       );
     });
 
-  const pickFromLibrary = async () => {
-    setError(null);
+  const optimizeImage = async (uri: string) => {
+    const manipulated = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 1600 } }],
+      {
+        compress: 0.65,
+        format: ImageManipulator.SaveFormat.JPEG,
+      }
+    );
 
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setError("Permission galerie refusee.");
-      return;
+    return manipulated.uri;
+  };
+
+  const validateImageSize = async (uri: string) => {
+    const fileInfo = await FileSystem.getInfoAsync(uri);
+    
+    if (!fileInfo.exists) {
+      throw new Error("Image introuvable.");
     }
 
-    const selected = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.9,
-      allowsEditing: true,
-    });
+    const sizeInBytes = fileInfo.size ?? 0;
+    const sizeInMb = sizeInBytes / (1024 * 1024);
 
-    if (!selected.canceled && selected.assets.length > 0) {
-      setImageUri(selected.assets[0].uri);
-      setResult(null);
+    if (sizeInMb > 5) {
+      throw new Error("Image trop volumineuse apres compression (plus de 5 MB).");
+    }
+
+    return {
+      sizeInBytes,
+      sizeInMb,
+    };
+  };
+
+  const prepareSelectedImage = async (uri: string) => {
+    const optimizedUri = await optimizeImage(uri);
+    await validateImageSize(optimizedUri);
+    setImageUri(optimizedUri);
+    setResult(null);
+  };
+
+  const pickFromLibrary = async () => {
+    try {
+      setError(null);
+
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setError("Permission galerie refusee.");
+        return;
+      }
+
+      const selected = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.7,
+        allowsEditing: false,
+      });
+
+      if (!selected.canceled && selected.assets.length > 0) {
+        await prepareSelectedImage(selected.assets[0].uri);
+      }
+    } catch (err: any) {
+      setError(err?.message || "Impossible de preparer l'image selectionnee.");
     }
   };
 
   const pickFromCamera = async () => {
-    setError(null);
+    try {
+      setError(null);
 
-    const consent = await promptCameraConsent();
-    if (consent === "cancel") return;
-    if (consent === "settings") {
-      await Linking.openSettings();
-      return;
-    }
+      const consent = await promptCameraConsent();
+      if (consent === "cancel") return;
+      if (consent === "settings") {
+        await Linking.openSettings();
+        return;
+      }
 
-    const currentPermission = await ImagePicker.getCameraPermissionsAsync();
-    let permissionGranted = currentPermission.granted;
-    let canAskAgain = currentPermission.canAskAgain;
+      const currentPermission = await ImagePicker.getCameraPermissionsAsync();
+      let permissionGranted = currentPermission.granted;
+      let canAskAgain = currentPermission.canAskAgain;
 
-    if (!permissionGranted && canAskAgain) {
-      const requestedPermission = await ImagePicker.requestCameraPermissionsAsync();
-      permissionGranted = requestedPermission.granted;
-      canAskAgain = requestedPermission.canAskAgain;
-    }
+      if (!permissionGranted && canAskAgain) {
+        const requestedPermission = await ImagePicker.requestCameraPermissionsAsync();
+        permissionGranted = requestedPermission.granted;
+        canAskAgain = requestedPermission.canAskAgain;
+      }
 
-    if (!permissionGranted) {
-      setError("L'acces a la camera est requis pour prendre une photo de la plaque.");
-      promptOpenSettings();
-      return;
-    }
+      if (!permissionGranted) {
+        setError("L'acces a la camera est requis pour prendre une photo de la plaque.");
+        promptOpenSettings();
+        return;
+      }
 
-    const captured = await ImagePicker.launchCameraAsync({
-      quality: 0.9,
-      allowsEditing: true,
-    });
+      const captured = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        quality: 0.6,
+        allowsEditing: false,
+      });
 
-    if (!captured.canceled && captured.assets.length > 0) {
-      setImageUri(captured.assets[0].uri);
-      setResult(null);
+      if (!captured.canceled && captured.assets.length > 0) {
+        await prepareSelectedImage(captured.assets[0].uri);
+      }
+    } catch (err: any) {
+      setError(err?.message || "Impossible de preparer l'image prise par la camera.");
     }
   };
 
@@ -135,10 +188,26 @@ export default function ScanPlateScreen() {
 
     try {
       const response = await scanVehiclePlate(imageUri, engine);
-      setResult(response.data);
+      setResult(response.data.data);
     } catch (err: any) {
+      console.log("OCR ERROR:", err);
+      console.log("OCR RESPONSE:", err?.response?.data);
+      console.log("OCR STATUS:", err?.response?.status);
+      console.log("OCR MESSAGE:", err?.message);
+
       const apiMessage = err?.response?.data?.message;
-      setError(apiMessage || "Echec du scan OCR.");
+
+      if (apiMessage) {
+        setError(apiMessage);
+      } else if (err?.message?.includes("Network Error")) {
+        setError(
+          `Connexion au serveur impossible pendant le scan OCR. Serveur actuel: ${API_BASE_URL}`
+        );
+      } else if (err?.code === "ECONNABORTED") {
+        setError("Le scan a pris trop de temps. Reessaie avec une image plus legere.");
+      } else {
+        setError("Echec du scan OCR.");
+      }
     } finally {
       setLoading(false);
     }
@@ -161,6 +230,7 @@ export default function ScanPlateScreen() {
           <View style={pageStyles.cardHeader}>
             <Text style={pageStyles.cardTitle}>Moteur OCR</Text>
           </View>
+
           <View style={styles.switchRow}>
             <Pressable
               style={[styles.engineBtn, engine === "ai" && styles.engineBtnActive]}
@@ -168,6 +238,7 @@ export default function ScanPlateScreen() {
             >
               <Text style={styles.engineText}>AI (YOLO + Paddle)</Text>
             </Pressable>
+
             <Pressable
               style={[styles.engineBtn, engine === "tesseract" && styles.engineBtnActive]}
               onPress={() => setEngine("tesseract")}
@@ -180,6 +251,7 @@ export default function ScanPlateScreen() {
             <Pressable style={styles.actionBtn} onPress={pickFromLibrary}>
               <Text style={styles.actionBtnText}>Choisir photo</Text>
             </Pressable>
+
             <Pressable style={styles.actionBtn} onPress={pickFromCamera}>
               <Text style={styles.actionBtnText}>Prendre photo</Text>
             </Pressable>
@@ -228,89 +300,101 @@ export default function ScanPlateScreen() {
 
 function createStyles(theme: AppTheme) {
   return StyleSheet.create({
-  content: {
-    paddingHorizontal: theme.spacing.md,
-    paddingTop: theme.spacing.lg,
-    paddingBottom: theme.spacing.lg,
-    gap: 12,
-  },
-  switchRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  engineBtn: {
-    flex: 1,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: "rgba(255,255,255,0.03)",
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-  },
-  engineBtnActive: {
-    borderColor: theme.colors.accentBorder,
-    backgroundColor: theme.colors.accentSoft,
-  },
-  engineText: {
-    color: theme.colors.text,
-    fontSize: theme.font.small,
-    fontWeight: "800",
-  },
-  actionRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  actionBtn: {
-    flex: 1,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border2,
-    backgroundColor: theme.colors.surface2,
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  actionBtnText: {
-    color: theme.colors.text,
-    fontSize: theme.font.small,
-    fontWeight: "800",
-  },
-  preview: {
-    width: "100%",
-    height: 180,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border2,
-  },
-  scanBtnText: {
-    color: theme.colors.text,
-    fontWeight: "900",
-    fontSize: theme.font.body,
-  },
-  loadingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  value: { color: theme.colors.textMuted, fontSize: theme.font.body, fontWeight: "700" },
-  errorText: { color: theme.colors.danger, fontSize: theme.font.small, fontWeight: "700" },
-  resultBox: {
-    gap: 6,
-    borderRadius: theme.radius.md,
-    padding: theme.spacing.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.border2,
-    backgroundColor: "rgba(255,255,255,0.03)",
-  },
-  resultTitle: {
-    color: theme.colors.text,
-    fontSize: theme.font.body,
-    fontWeight: "900",
-  },
-  linkBtn: {
-    alignSelf: "center",
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-  },
-  linkText: { color: "rgba(255,215,0,0.9)", fontWeight: "900", fontSize: theme.font.body },
+    content: {
+      paddingHorizontal: theme.spacing.md,
+      paddingTop: theme.spacing.lg,
+      paddingBottom: theme.spacing.lg,
+      gap: 12,
+    },
+    switchRow: {
+      flexDirection: "row",
+      gap: 8,
+    },
+    engineBtn: {
+      flex: 1,
+      borderRadius: theme.radius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: "rgba(255,255,255,0.03)",
+      paddingVertical: 8,
+      paddingHorizontal: 10,
+    },
+    engineBtnActive: {
+      borderColor: theme.colors.accentBorder,
+      backgroundColor: theme.colors.accentSoft,
+    },
+    engineText: {
+      color: theme.colors.text,
+      fontSize: theme.font.small,
+      fontWeight: "800",
+    },
+    actionRow: {
+      flexDirection: "row",
+      gap: 8,
+    },
+    actionBtn: {
+      flex: 1,
+      borderRadius: theme.radius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border2,
+      backgroundColor: theme.colors.surface2,
+      paddingVertical: 10,
+      alignItems: "center",
+    },
+    actionBtnText: {
+      color: theme.colors.text,
+      fontSize: theme.font.small,
+      fontWeight: "800",
+    },
+    preview: {
+      width: "100%",
+      height: 180,
+      borderRadius: theme.radius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border2,
+    },
+    scanBtnText: {
+      color: theme.colors.text,
+      fontWeight: "900",
+      fontSize: theme.font.body,
+    },
+    loadingRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    value: {
+      color: theme.colors.textMuted,
+      fontSize: theme.font.body,
+      fontWeight: "700",
+    },
+    errorText: {
+      color: theme.colors.danger,
+      fontSize: theme.font.small,
+      fontWeight: "700",
+    },
+    resultBox: {
+      gap: 6,
+      borderRadius: theme.radius.md,
+      padding: theme.spacing.sm,
+      borderWidth: 1,
+      borderColor: theme.colors.border2,
+      backgroundColor: "rgba(255,255,255,0.03)",
+    },
+    resultTitle: {
+      color: theme.colors.text,
+      fontSize: theme.font.body,
+      fontWeight: "900",
+    },
+    linkBtn: {
+      alignSelf: "center",
+      paddingVertical: 6,
+      paddingHorizontal: 8,
+    },
+    linkText: {
+      color: "rgba(255,215,0,0.9)",
+      fontWeight: "900",
+      fontSize: theme.font.body,
+    },
   });
 }
