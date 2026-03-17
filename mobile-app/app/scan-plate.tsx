@@ -20,7 +20,7 @@ import { AppTheme } from "../constants/theme";
 import { API_BASE_URL } from "../src/config/api";
 import { useAppTheme } from "../src/providers/theme.provider";
 import { createPageStyles } from "../src/ui/page-styles";
-import { OcrEngine, scanVehiclePlate } from "../src/api/vehicles.api";
+import { scanVehiclePlate } from "../src/api/vehicles.api";
 
 type ScanResult = {
   plate: string | null;
@@ -36,7 +36,6 @@ export default function ScanPlateScreen() {
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [imageUri, setImageUri] = useState<string | null>(null);
-  const [engine, setEngine] = useState<OcrEngine>("ai");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ScanResult | null>(null);
@@ -187,7 +186,7 @@ export default function ScanPlateScreen() {
     setResult(null);
 
     try {
-      const response = await scanVehiclePlate(imageUri, engine);
+      const response = await scanVehiclePlate(imageUri, "ai");
       setResult(response.data.data);
     } catch (err: any) {
       console.log("OCR ERROR:", err);
@@ -228,24 +227,12 @@ export default function ScanPlateScreen() {
 
         <View style={pageStyles.card}>
           <View style={pageStyles.cardHeader}>
-            <Text style={pageStyles.cardTitle}>Moteur OCR</Text>
+            <Text style={pageStyles.cardTitle}>Scan automatique</Text>
           </View>
 
-          <View style={styles.switchRow}>
-            <Pressable
-              style={[styles.engineBtn, engine === "ai" && styles.engineBtnActive]}
-              onPress={() => setEngine("ai")}
-            >
-              <Text style={styles.engineText}>AI (YOLO + Paddle)</Text>
-            </Pressable>
-
-            <Pressable
-              style={[styles.engineBtn, engine === "tesseract" && styles.engineBtnActive]}
-              onPress={() => setEngine("tesseract")}
-            >
-              <Text style={styles.engineText}>Tesseract</Text>
-            </Pressable>
-          </View>
+          <Text style={styles.helperText}>
+            L'application choisit automatiquement le meilleur mode de lecture pour la plaque.
+          </Text>
 
           <View style={styles.actionRow}>
             <Pressable style={styles.actionBtn} onPress={pickFromLibrary}>
@@ -306,27 +293,10 @@ function createStyles(theme: AppTheme) {
       paddingBottom: theme.spacing.lg,
       gap: 12,
     },
-    switchRow: {
-      flexDirection: "row",
-      gap: 8,
-    },
-    engineBtn: {
-      flex: 1,
-      borderRadius: theme.radius.md,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      backgroundColor: "rgba(255,255,255,0.03)",
-      paddingVertical: 8,
-      paddingHorizontal: 10,
-    },
-    engineBtnActive: {
-      borderColor: theme.colors.accentBorder,
-      backgroundColor: theme.colors.accentSoft,
-    },
-    engineText: {
-      color: theme.colors.text,
+    helperText: {
+      color: theme.colors.textMuted,
       fontSize: theme.font.small,
-      fontWeight: "800",
+      fontWeight: "600",
     },
     actionRow: {
       flexDirection: "row",
