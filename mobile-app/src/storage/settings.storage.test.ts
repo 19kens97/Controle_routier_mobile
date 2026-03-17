@@ -20,6 +20,7 @@ const DEFAULTS: AppSettings = {
   textSize: "NORMAL",
   offlineMode: false,
   syncPolicy: "ALWAYS",
+  notifEnabled: true,
   notifPriorityAlerts: true,
   notifExpiredDocs: true,
   notifEndShift: false,

@@ -129,7 +129,7 @@ const DARK_COLORS: ThemeColors = {
   bg0: "#071321",
   bg1: "#0B2A4A",
   bg2: "#071321",
-  surface: "rgba(9, 27, 47, 0.92)",
+  surface: "rgba
   surface2: "rgba(12, 35, 60, 0.96)",
 
   border: "rgba(133, 169, 214, 0.20)",

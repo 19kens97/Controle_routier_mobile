@@ -54,6 +54,13 @@
           "photosPermission": "Autoriser l'application a acceder a la galerie pour selectionner les photos de plaques."
         }
       ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#E85D04"
+        }
+      ],
       "expo-secure-store"
     ],
     "experiments": {

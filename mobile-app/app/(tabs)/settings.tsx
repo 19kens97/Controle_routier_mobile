@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -31,6 +32,13 @@ import {
   saveSettings,
   TextSize,
 } from "../../src/storage/settings.storage";
+import {
+  areNotificationsSupported,
+  getNotificationPermissionState,
+  requestNotificationPermission,
+  sendTestNotification,
+  type NotificationPermissionState,
+} from "../../src/utils/notifications";
 
 const THEME_OPTIONS: { mode: ThemeMode; label: string; description: string }[] = [
   { mode: "SYSTEM", label: "Système", description: "Palette bleue de l'application." },
@@ -81,6 +89,10 @@ export default function SettingsScreen() {
   const [pendingThemeMode, setPendingThemeMode] = useState<ThemeMode>("SYSTEM");
   const [textSizePickerOpen, setTextSizePickerOpen] = useState(false);
   const [pendingTextSize, setPendingTextSize] = useState<TextSize>("NORMAL");
+  const [notifPermissionState, setNotifPermissionState] =
+    useState<NotificationPermissionState>("undetermined");
+  const [sendingTestNotification, setSendingTestNotification] = useState(false);
+  const notificationsSupported = areNotificationsSupported();
 
   const [syncState, setSyncState] = useState({ online: true, pending: 0 }); // V1 local
 
@@ -111,10 +123,12 @@ export default function SettingsScreen() {
     (async () => {
       try {
         const s = await loadSettings();
+        const permissionState = await getNotificationPermissionState();
         if (mounted) {
           setSettings(s);
           setPendingThemeMode(s.themeMode);
           setPendingTextSize(s.textSize);
+          setNotifPermissionState(permissionState);
         }
       } finally {
         if (mounted) setLoadingSettings(false);
@@ -177,6 +191,115 @@ export default function SettingsScreen() {
     }
 
     setTextSizePickerOpen(false);
+  }
+
+  async function onToggleNotificationsEnabled(value: boolean) {
+    if (!settings) return;
+
+    if (!notificationsSupported) {
+      Alert.alert(
+        "Expo Go limité",
+        "Les notifications push Android ne sont pas disponibles dans Expo Go. Utilise une development build pour tester cette fonction."
+      );
+      await updateSettings({ notifEnabled: false });
+      return;
+    }
+
+    if (!value) {
+      await updateSettings({ notifEnabled: false });
+      return;
+    }
+
+    const permissionState = await requestNotificationPermission();
+    setNotifPermissionState(permissionState);
+
+    if (permissionState !== "granted") {
+      Alert.alert(
+        "Notifications bloquees",
+        "Autorise les notifications dans les reglages du telephone pour activer cette option.",
+        [
+          { text: "Plus tard", style: "cancel" },
+          {
+            text: "Ouvrir les reglages",
+            onPress: () => Linking.openSettings(),
+          },
+        ]
+      );
+      await updateSettings({ notifEnabled: false });
+      return;
+    }
+
+    await updateSettings({ notifEnabled: true });
+  }
+
+  async function onToggleNotificationCategory(
+    key: "notifPriorityAlerts" | "notifExpiredDocs" | "notifEndShift",
+    value: boolean
+  ) {
+    if (!settings) return;
+
+    if (!settings.notifEnabled) {
+      Alert.alert(
+        "Notifications desactivees",
+        "Active d'abord les notifications generales pour choisir les alertes a recevoir."
+      );
+      return;
+    }
+
+    if (notifPermissionState !== "granted") {
+      const permissionState = await requestNotificationPermission();
+      setNotifPermissionState(permissionState);
+
+      if (permissionState !== "granted") {
+        Alert.alert(
+          "Autorisation requise",
+          "Le telephone refuse encore les notifications. Change ce reglage depuis les parametres systeme."
+        );
+        return;
+      }
+    }
+
+    await updateSettings({ [key]: value });
+  }
+
+  async function onSendTestNotification() {
+    if (!settings?.notifEnabled) {
+      Alert.alert(
+        "Notifications desactivees",
+        "Active les notifications generales avant d'envoyer un test."
+      );
+      return;
+    }
+
+    if (!notificationsSupported) {
+      Alert.alert(
+        "Expo Go limité",
+        "Les notifications de test ne sont pas disponibles dans Expo Go. Utilise une development build pour les tester."
+      );
+      return;
+    }
+
+    if (notifPermissionState !== "granted") {
+      const permissionState = await requestNotificationPermission();
+      setNotifPermissionState(permissionState);
+      if (permissionState !== "granted") {
+        Alert.alert(
+          "Autorisation requise",
+          "Impossible d'envoyer une notification tant que l'autorisation n'est pas accordee."
+        );
+        return;
+      }
+    }
+
+    setSendingTestNotification(true);
+    try {
+      await sendTestNotification();
+      Alert.alert("Notification envoyee", "Une notification de test vient d'etre programmee.");
+    } catch {
+      Alert.alert("Erreur", "Impossible d'envoyer la notification de test.");
+    } finally {
+      setSendingTestNotification(false);
+    }
   }
 
   const appVersion = useMemo(() => {
@@ -438,27 +561,72 @@ export default function SettingsScreen() {
             <Text style={styles.cardTitle}>Notifications</Text>
             <Ionicons name="notifications-outline" size={20} color={theme.colors.text} />
           </View>
+          <Text style={styles.prefStateText}>
+            {!notificationsSupported
+              ? "Expo Go ne prend pas en charge les notifications push Android de cette application."
+              : notifPermissionState === "granted"
+              ? "Autorisation systeme accordee"
+              : notifPermissionState === "denied"
+                ? "Autorisation systeme refusee"
+                : "Autorisation systeme a demander"}
+          </Text>
+
+          <ToggleRow
+            label="Activer les notifications"
+            desc="Interrupteur general pour autoriser les notifications de l'application."
+            value={settings.notifEnabled}
+            onValueChange={onToggleNotificationsEnabled}
+            styles={styles}
+            disabled={!notificationsSupported}
+          />
+
+          {notifPermissionState === "denied" ? (
+            <Pressable style={styles.btn} onPress={() => Linking.openSettings()}>
+              <Text style={styles.btnText}>Ouvrir les reglages du telephone</Text>
+            </Pressable>
+          ) : null}
+
+          <Pressable
+            style={[
+              styles.btn,
+              (!notificationsSupported || !settings.notifEnabled || sendingTestNotification) &&
+                styles.btnDisabled,
+            ]}
+            onPress={onSendTestNotification}
+            disabled={!notificationsSupported || !settings.notifEnabled || sendingTestNotification}
+          >
+            <Text style={styles.btnText}>
+              {sendingTestNotification
+                ? "Envoi en cours..."
+                : "Envoyer une notification de test"}
+            </Text>
+          </Pressable>
+
+          <Divider theme={theme} />
 
           <ToggleRow
             label="Alertes prioritaires"
             desc="Véhicule recherché, alerte importante, etc."
             value={settings.notifPriorityAlerts}
-            onValueChange={(v) => updateSettings({ notifPriorityAlerts: v })}
+            onValueChange={(v) => onToggleNotificationCategory("notifPriorityAlerts", v)}
             styles={styles}
+            disabled={!settings.notifEnabled}
           />
           <ToggleRow
             label="Documents expirés"
             desc="Avertissements assurance / carte / permis expirés."
             value={settings.notifExpiredDocs}
-            onValueChange={(v) => updateSettings({ notifExpiredDocs: v })}
+            onValueChange={(v) => onToggleNotificationCategory("notifExpiredDocs", v)}
             styles={styles}
+            disabled={!settings.notifEnabled}
           />
           <ToggleRow
             label="Rappel fin de service"
             desc="Petit rappel en fin de journée (optionnel)."
             value={settings.notifEndShift}
-            onValueChange={(v) => updateSettings({ notifEndShift: v })}
+            onValueChange={(v) => onToggleNotificationCategory("notifEndShift", v)}
             styles={styles}
+            disabled={!settings.notifEnabled}
           />
         </View>
 
@@ -777,20 +945,22 @@ function ToggleRow({
   value,
   onValueChange,
   styles,
+  disabled = false,
 }: {
   label: string;
   desc?: string;
   value: boolean;
   onValueChange: (v: boolean) => void;
   styles: ReturnType<typeof createStyles>;
+  disabled?: boolean;
 }) {
   return (
-    <View style={styles.toggleRow}>
+    <View style={[styles.toggleRow, disabled && styles.rowDisabled]}>
       <View style={{ flex: 1 }}>
         <Text style={styles.toggleLabel}>{label}</Text>
         {desc ? <Text style={styles.toggleDesc}>{desc}</Text> : null}
       </View>
-      <Switch value={value} onValueChange={onValueChange} />
+      <Switch value={value} onValueChange={onValueChange} disabled={disabled} />
     </View>
   );
 }
@@ -928,6 +1098,10 @@ function createStyles(theme: AppTheme) {
     marginTop: 2,
   },
 
+  rowDisabled: {
+    opacity: 0.45,
+  },
+
   selectRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -966,6 +1140,10 @@ function createStyles(theme: AppTheme) {
     color: theme.colors.text,
     fontWeight: "900",
     fontSize: theme.font.body,
+  },
+
+  btnDisabled: {
+    opacity: 0.55,
   },
 
   modalRoot: {

@@ -6,8 +6,13 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { theme } from "../constants/theme";
 import { ThemeProvider, useAppTheme } from "../src/providers/theme.provider";
+import { configureNotificationChannel } from "../src/utils/notifications";
 
 export default function RootLayout() {
+  React.useEffect(() => {
+    configureNotificationChannel().catch(() => undefined);
+  }, []);
+
   return (
     <SafeAreaProvider>
       <ThemeProvider>

@@ -13,6 +13,7 @@ export type AppSettings = {
   offlineMode: boolean;
   syncPolicy: SyncPolicy;
 
+  notifEnabled: boolean;
   notifPriorityAlerts: boolean;
   notifExpiredDocs: boolean;
   notifEndShift: boolean;
@@ -30,6 +31,7 @@ const DEFAULTS: AppSettings = {
   offlineMode: false,
   syncPolicy: "ALWAYS",
 
+  notifEnabled: true,
   notifPriorityAlerts: true,
   notifExpiredDocs: true,
   notifEndShift: false,
