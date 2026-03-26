@@ -1,5 +1,6 @@
 import * as SecureStore from "expo-secure-store";
 import { API_BASE_URL } from "../config/api";
+import api from "./api";
 
 export type OcrEngine = "ai" | "tesseract";
 
@@ -9,12 +10,61 @@ export type PlateScanData = {
   candidates: string[];
   raw_text: string;
   is_reliable: boolean;
+  source: string;
 };
 
 export type PlateScanResponse = {
   success: boolean;
   message: string;
   data: PlateScanData;
+};
+
+export type VehicleCardData = {
+  id: number;
+  vehicle: number;
+  card_number: string;
+  issue_date: string;
+  expiration_date: string;
+  status: string;
+  printed_by: string;
+  category: string;
+};
+
+export type VehicleInsuranceData = {
+  id: number;
+  vehicle: number;
+  company_name: string;
+  policy_number: string;
+  issued_date: string;
+  expiration_date: string;
+  is_active: boolean;
+};
+
+export type VehicleRegistrationData = {
+  id: number;
+  vehicle: number;
+  registration_code: string;
+  registration_type: string;
+  issued_date: string;
+  expiry_date: string;
+};
+
+export type VehicleLookupData = {
+  id: number;
+  plate_number: string;
+  brand: string;
+  model: string;
+  color: string;
+  year: number;
+  vehicle_cards: VehicleCardData[];
+  insurances: VehicleInsuranceData[];
+  registration: VehicleRegistrationData | null;
+};
+
+export type VehicleLookupResponse = {
+  success: boolean;
+  message: string;
+  data: VehicleLookupData;
 };
 
 const ACCESS_KEY = "access_token";
@@ -71,4 +121,12 @@ export async function scanVehiclePlate(imageUri: string, engine: OcrEngine) {
   return {
     data: responseData as PlateScanResponse,
   };
+}
+
+export async function searchVehicleByPlate(plateNumber: string) {
+  const response = await api.get<VehicleLookupResponse>("vehicles/search/", {
+    params: { plate_number: plateNumber },
+  });
+
+  return response.data;
 }

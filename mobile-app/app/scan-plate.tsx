@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { router } from "expo-router";
@@ -20,7 +21,16 @@ import { AppTheme } from "../constants/theme";
 import { API_BASE_URL } from "../src/config/api";
 import { useAppTheme } from "../src/providers/theme.provider";
 import { createPageStyles } from "../src/ui/page-styles";
-import { scanVehiclePlate } from "../src/api/vehicles.api";
+import {
+  scanVehiclePlate,
+  searchVehicleByPlate,
+  VehicleLookupData,
+} from "../src/api/vehicles.api";
+import {
+  getVehicleRegistrationByCode,
+  searchVehicleCard,
+  searchVehicleInsurance,
+} from "../src/api/documents.api";
 
 type ScanResult = {
   plate: string | null;
@@ -28,7 +38,81 @@ type ScanResult = {
   candidates: string[];
   raw_text: string;
   is_reliable: boolean;
+  source: string;
 };
+
+type RelatedDocumentState = {
+  vehicleCard: any | null;
+  insurance: any | null;
+  registration: any | null;
+};
+
+const PLATE_FORMAT_REGEX = /^[A-Z]{2}-\d{5}$/;
+
+function normalizePlateInput(value: string): string {
+  const cleaned = (value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const letters = cleaned
+    .slice(0, 2)
+    .replace(/[^A-Z]/g, "");
+  const digits = cleaned
+    .slice(2)
+    .replace(/[^0-9]/g, "")
+    .slice(0, 5);
+
+  if (!letters && !digits) return "";
+  if (letters.length < 2) return letters;
+  return digits.length ? `${letters}-${digits}` : `${letters}-`;
+}
+
+function normalizeValue(value: unknown): string {
+  if (value === null || value === undefined) return "-";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function prettyKey(key: string) {
+  return key.replaceAll("_", " ");
+}
+
+function PlateGuide({ styles }: { styles: ReturnType<typeof createStyles> }) {
+  return (
+    <View style={styles.overlayCard}>
+      <View style={styles.overlayRow}>
+        <View style={styles.overlayCell}>
+          <Text style={styles.overlayText}>A</Text>
+        </View>
+        <View style={styles.overlayCell}>
+          <Text style={styles.overlayText}>A</Text>
+        </View>
+        <View style={styles.overlayDash}>
+          <Text style={styles.overlayDashText}>-</Text>
+        </View>
+        <View style={styles.overlayCell}>
+          <Text style={styles.overlayText}>1</Text>
+        </View>
+        <View style={styles.overlayCell}>
+          <Text style={styles.overlayText}>2</Text>
+        </View>
+        <View style={styles.overlayCell}>
+          <Text style={styles.overlayText}>3</Text>
+        </View>
+        <View style={styles.overlayCell}>
+          <Text style={styles.overlayText}>4</Text>
+        </View>
+        <View style={styles.overlayCell}>
+          <Text style={styles.overlayText}>5</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
 
 export default function ScanPlateScreen() {
   const { theme } = useAppTheme();
@@ -39,11 +123,32 @@ export default function ScanPlateScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ScanResult | null>(null);
+  const [plateQuery, setPlateQuery] = useState("");
+  const [vehicleData, setVehicleData] = useState<VehicleLookupData | null>(null);
+  const [vehicleLookupError, setVehicleLookupError] = useState<string | null>(null);
+  const [relatedDocuments, setRelatedDocuments] = useState<RelatedDocumentState | null>(null);
+  const [documentLookupError, setDocumentLookupError] = useState<string | null>(null);
+  const [documentLoading, setDocumentLoading] = useState(false);
 
   const confidenceLabel = useMemo(() => {
     if (!result) return "";
     return `${Math.round(result.confidence * 100)}%`;
   }, [result]);
+
+  const sourceLabel = useMemo(() => {
+    if (!result) return "";
+
+    if (result.source === "focused") return "Crop heuristique";
+    if (result.source === "full") return "Image complete";
+    if (result.source === "ai") return "Pipeline AI";
+    if (result.source === "openalpr") return "OpenALPR";
+    return result.source;
+  }, [result]);
+
+  const isPlateQueryValid = useMemo(
+    () => PLATE_FORMAT_REGEX.test(plateQuery),
+    [plateQuery]
+  );
 
   const promptOpenSettings = () => {
     Alert.alert(
@@ -73,9 +178,9 @@ export default function ScanPlateScreen() {
   const optimizeImage = async (uri: string) => {
     const manipulated = await ImageManipulator.manipulateAsync(
       uri,
-      [{ resize: { width: 1600 } }],
+      [{ resize: { width: 1920 } }],
       {
-        compress: 0.65,
+        compress: 0.9,
         format: ImageManipulator.SaveFormat.JPEG,
       }
     );
@@ -94,7 +199,9 @@ export default function ScanPlateScreen() {
     const sizeInMb = sizeInBytes / (1024 * 1024);
 
     if (sizeInMb > 5) {
-      throw new Error("Image trop volumineuse apres compression (plus de 5 MB).");
+      throw new Error(
+        `Image encore trop volumineuse apres optimisation (${sizeInMb.toFixed(1)} MB). Essaie une photo plus rapprochee ou recadre davantage la plaque.`
+      );
     }
 
     return {
@@ -108,6 +215,82 @@ export default function ScanPlateScreen() {
     await validateImageSize(optimizedUri);
     setImageUri(optimizedUri);
     setResult(null);
+    setPlateQuery("");
+    setVehicleData(null);
+    setVehicleLookupError(null);
+    setRelatedDocuments(null);
+    setDocumentLookupError(null);
+  };
+
+  const loadVehicleByPlate = async (plateNumber: string) => {
+    const vehicleResponse = await searchVehicleByPlate(plateNumber);
+    setVehicleData(vehicleResponse.data);
+    return vehicleResponse.data;
+  };
+
+  const loadRelatedDocuments = async (vehicle: VehicleLookupData) => {
+    const firstCard = vehicle.vehicle_cards[0];
+    const firstInsurance = vehicle.insurances[0];
+    const registrationCode = vehicle.registration?.registration_code;
+
+    const docs: RelatedDocumentState = {
+      vehicleCard: null,
+      insurance: null,
+      registration: null,
+    };
+
+    if (firstCard?.card_number) {
+      docs.vehicleCard = await searchVehicleCard(firstCard.card_number);
+    }
+
+    if (firstInsurance?.policy_number) {
+      docs.insurance = await searchVehicleInsurance(firstInsurance.policy_number);
+    }
+
+    if (registrationCode) {
+      docs.registration = await getVehicleRegistrationByCode(registrationCode);
+    }
+
+    setRelatedDocuments(docs);
+    return docs;
+  };
+
+  const searchDocumentsFromPlate = async (rawPlate?: string) => {
+    const value = (rawPlate ?? plateQuery).trim().toUpperCase();
+
+    if (!value) {
+      setDocumentLookupError("Saisis ou confirme d'abord le numero d'immatriculation.");
+      return;
+    }
+
+    setDocumentLoading(true);
+    setDocumentLookupError(null);
+    setVehicleLookupError(null);
+    setRelatedDocuments(null);
+
+    try {
+      const vehicle = await loadVehicleByPlate(value);
+      await loadRelatedDocuments(vehicle);
+      setPlateQuery(value);
+    } catch (lookupErr: any) {
+      const status = lookupErr?.response?.status;
+      const lookupMessage =
+        lookupErr?.response?.data?.message ||
+        lookupErr?.response?.data?.detail ||
+        lookupErr?.message;
+
+      if (status === 404) {
+        setDocumentLookupError("Aucun vehicule ou document n'a ete trouve pour cette immatriculation.");
+      } else {
+        setDocumentLookupError(
+          typeof lookupMessage === "string" && lookupMessage
+            ? lookupMessage
+            : "Impossible de charger les informations liees a cette immatriculation."
+        );
+      }
+    } finally {
+      setDocumentLoading(false);
+    }
   };
 
   const pickFromLibrary = async () => {
@@ -184,10 +367,40 @@ export default function ScanPlateScreen() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setPlateQuery("");
+    setVehicleData(null);
+    setVehicleLookupError(null);
+    setRelatedDocuments(null);
+    setDocumentLookupError(null);
 
     try {
       const response = await scanVehiclePlate(imageUri, "ai");
       setResult(response.data.data);
+      setPlateQuery(normalizePlateInput(response.data.data.plate ?? ""));
+
+      if (response.data.data.plate) {
+        try {
+          await loadVehicleByPlate(response.data.data.plate);
+        } catch (lookupErr: any) {
+          const status = lookupErr?.response?.status;
+          const lookupMessage =
+            lookupErr?.response?.data?.message ||
+            lookupErr?.response?.data?.detail ||
+            lookupErr?.message;
+
+          if (status === 404) {
+            setVehicleLookupError("Plaque detectee, mais vehicule introuvable dans la base.");
+          } else {
+            setVehicleLookupError(
+              typeof lookupMessage === "string" && lookupMessage
+                ? lookupMessage
+                : "Plaque detectee, mais impossible de charger les informations du vehicule."
+            );
+          }
+        }
+      } else {
+        setError(response.data.message || "Aucune plaque fiable n'a ete reconnue.");
+      }
     } catch (err: any) {
       console.log("OCR ERROR:", err);
       console.log("OCR RESPONSE:", err?.response?.data);
@@ -198,14 +411,17 @@ export default function ScanPlateScreen() {
 
       if (apiMessage) {
         setError(apiMessage);
-      } else if (err?.message?.includes("Network Error")) {
+      } else if (
+        err?.message?.includes("Network Error") ||
+        err?.message?.includes("network request failed")
+      ) {
         setError(
           `Connexion au serveur impossible pendant le scan OCR. Serveur actuel: ${API_BASE_URL}`
         );
-      } else if (err?.code === "ECONNABORTED") {
+      } else if (err?.code === "ECONNABORTED" || err?.message?.includes("timed out")) {
         setError("Le scan a pris trop de temps. Reessaie avec une image plus legere.");
       } else {
-        setError("Echec du scan OCR.");
+        setError(err?.message || "Echec du scan OCR.");
       }
     } finally {
       setLoading(false);
@@ -231,7 +447,7 @@ export default function ScanPlateScreen() {
           </View>
 
           <Text style={styles.helperText}>
-            L'application choisit automatiquement le meilleur mode de lecture pour la plaque.
+            Cadre la plaque dans le gabarit `AA-12345`, puis laisse l'application choisir le meilleur mode de lecture.
           </Text>
 
           <View style={styles.actionRow}>
@@ -244,7 +460,21 @@ export default function ScanPlateScreen() {
             </Pressable>
           </View>
 
-          {imageUri ? <Image source={{ uri: imageUri }} style={styles.preview} /> : null}
+          <View style={styles.previewWrap}>
+            {imageUri ? (
+              <Image source={{ uri: imageUri }} style={styles.preview} />
+            ) : (
+              <View style={styles.previewPlaceholder}>
+                <Text style={styles.previewPlaceholderTitle}>Gabarit de plaque</Text>
+                <Text style={styles.previewPlaceholderText}>
+                  Centre les 2 lettres puis les 5 chiffres dans les cases pour aider le scan.
+                </Text>
+              </View>
+            )}
+            <View pointerEvents="none" style={styles.overlayLayer}>
+              <PlateGuide styles={styles} />
+            </View>
+          </View>
 
           <Pressable
             style={[pageStyles.primaryButton, loading && { opacity: 0.7 }]}
@@ -269,10 +499,133 @@ export default function ScanPlateScreen() {
               <Text style={styles.value}>Plaque: {result.plate || "Non detectee"}</Text>
               <Text style={styles.value}>Confiance: {confidenceLabel}</Text>
               <Text style={styles.value}>Fiable: {result.is_reliable ? "Oui" : "Non"}</Text>
+              <Text style={styles.value}>Source scan: {sourceLabel || "-"}</Text>
               <Text style={styles.value}>
                 Candidats: {result.candidates.length ? result.candidates.join(", ") : "-"}
               </Text>
               <Text style={styles.value}>Texte brut: {result.raw_text || "-"}</Text>
+            </View>
+          ) : null}
+
+          {result?.plate ? (
+            <View style={styles.resultBox}>
+              <Text style={styles.resultTitle}>Recherche complete par immatriculation</Text>
+              <Text style={styles.helperText}>
+                Confirme la plaque detectee puis charge les documents lies au vehicule.
+              </Text>
+
+              <TextInput
+                value={plateQuery}
+                onChangeText={(value) => {
+                  setPlateQuery(normalizePlateInput(value));
+                  if (documentLookupError) {
+                    setDocumentLookupError(null);
+                  }
+                }}
+                placeholder="Ex: AA-12345"
+                placeholderTextColor={theme.colors.textDim}
+                autoCapitalize="characters"
+                style={styles.input}
+                returnKeyType="search"
+                onSubmitEditing={() => searchDocumentsFromPlate()}
+              />
+
+              <Text style={styles.helperText}>
+                Format attendu: 2 lettres, un tiret, puis 5 chiffres.
+              </Text>
+              {!isPlateQueryValid && plateQuery.length > 0 ? (
+                <Text style={styles.warningText}>
+                  L'immatriculation doit respecter le format `AA-12345`.
+                </Text>
+              ) : null}
+
+              <Pressable
+                style={[
+                  pageStyles.primaryButton,
+                  !isPlateQueryValid && { opacity: 0.6 },
+                  documentLoading && { opacity: 0.7 },
+                ]}
+                onPress={() => searchDocumentsFromPlate()}
+                disabled={documentLoading || !isPlateQueryValid}
+              >
+                {documentLoading ? (
+                  <View style={styles.loadingRow}>
+                    <ActivityIndicator color="#000" size="small" />
+                    <Text style={styles.scanBtnText}>Recherche documents...</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.scanBtnText}>Chercher vehicule et documents</Text>
+                )}
+              </Pressable>
+
+              {documentLookupError ? (
+                <Text style={styles.errorText}>{documentLookupError}</Text>
+              ) : null}
+            </View>
+          ) : null}
+
+          {vehicleLookupError ? <Text style={styles.warningText}>{vehicleLookupError}</Text> : null}
+
+          {vehicleData ? (
+            <View style={styles.resultBox}>
+              <Text style={styles.resultTitle}>Analyse vehicule</Text>
+              <Text style={styles.value}>
+                Vehicule: {vehicleData.brand} {vehicleData.model}
+              </Text>
+              <Text style={styles.value}>Plaque base: {vehicleData.plate_number}</Text>
+              <Text style={styles.value}>Couleur: {vehicleData.color}</Text>
+              <Text style={styles.value}>Annee: {vehicleData.year}</Text>
+              <Text style={styles.value}>
+                Carte vehicule: {vehicleData.vehicle_cards[0]?.card_number || "-"}
+              </Text>
+              <Text style={styles.value}>
+                Statut carte: {vehicleData.vehicle_cards[0]?.status || "-"}
+              </Text>
+              <Text style={styles.value}>
+                Assurance: {vehicleData.insurances[0]?.policy_number || "-"}
+              </Text>
+              <Text style={styles.value}>
+                Compagnie: {vehicleData.insurances[0]?.company_name || "-"}
+              </Text>
+              <Text style={styles.value}>
+                Immatriculation: {vehicleData.registration?.registration_code || "-"}
+              </Text>
+            </View>
+          ) : null}
+
+          {relatedDocuments?.vehicleCard ? (
+            <View style={styles.resultBox}>
+              <Text style={styles.resultTitle}>Document carte vehicule</Text>
+              {Object.entries(relatedDocuments.vehicleCard).map(([key, value]) => (
+                <View key={key} style={styles.detailRow}>
+                  <Text style={styles.detailKey}>{prettyKey(key)}</Text>
+                  <Text style={styles.value}>{normalizeValue(value)}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          {relatedDocuments?.insurance ? (
+            <View style={styles.resultBox}>
+              <Text style={styles.resultTitle}>Document assurance</Text>
+              {Object.entries(relatedDocuments.insurance).map(([key, value]) => (
+                <View key={key} style={styles.detailRow}>
+                  <Text style={styles.detailKey}>{prettyKey(key)}</Text>
+                  <Text style={styles.value}>{normalizeValue(value)}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          {relatedDocuments?.registration ? (
+            <View style={styles.resultBox}>
+              <Text style={styles.resultTitle}>Document immatriculation</Text>
+              {Object.entries(relatedDocuments.registration).map(([key, value]) => (
+                <View key={key} style={styles.detailRow}>
+                  <Text style={styles.detailKey}>{prettyKey(key)}</Text>
+                  <Text style={styles.value}>{normalizeValue(value)}</Text>
+                </View>
+              ))}
             </View>
           ) : null}
         </View>
@@ -320,8 +673,39 @@ function createStyles(theme: AppTheme) {
       width: "100%",
       height: 180,
       borderRadius: theme.radius.md,
+    },
+    previewWrap: {
+      position: "relative",
+      width: "100%",
+      height: 180,
+      borderRadius: theme.radius.md,
+      overflow: "hidden",
       borderWidth: 1,
       borderColor: theme.colors.border2,
+      backgroundColor: "rgba(255,255,255,0.03)",
+    },
+    previewPlaceholder: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: theme.spacing.md,
+      gap: 8,
+    },
+    previewPlaceholderTitle: {
+      color: theme.colors.text,
+      fontSize: theme.font.body,
+      fontWeight: "900",
+    },
+    previewPlaceholderText: {
+      color: theme.colors.textMuted,
+      fontSize: theme.font.small,
+      fontWeight: "700",
+      textAlign: "center",
+    },
+    overlayLayer: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: "center",
+      justifyContent: "center",
     },
     scanBtnText: {
       color: theme.colors.text,
@@ -338,8 +722,24 @@ function createStyles(theme: AppTheme) {
       fontSize: theme.font.body,
       fontWeight: "700",
     },
+    input: {
+      borderWidth: 1,
+      borderColor: theme.colors.border2,
+      borderRadius: theme.radius.md,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      color: theme.colors.text,
+      backgroundColor: theme.colors.surface2,
+      fontWeight: "700",
+      fontSize: theme.font.body,
+    },
     errorText: {
       color: theme.colors.danger,
+      fontSize: theme.font.small,
+      fontWeight: "700",
+    },
+    warningText: {
+      color: "rgba(255,215,0,0.9)",
       fontSize: theme.font.small,
       fontWeight: "700",
     },
@@ -355,6 +755,65 @@ function createStyles(theme: AppTheme) {
       color: theme.colors.text,
       fontSize: theme.font.body,
       fontWeight: "900",
+    },
+    overlayCard: {
+      width: "84%",
+      maxWidth: 320,
+      minHeight: 70,
+      borderRadius: theme.radius.md,
+      borderWidth: 2,
+      borderColor: "rgba(255,215,0,0.95)",
+      backgroundColor: "rgba(0,0,0,0.30)",
+      paddingHorizontal: 10,
+      paddingVertical: 12,
+      justifyContent: "center",
+      shadowColor: "#000",
+      shadowOpacity: 0.16,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 3,
+    },
+    overlayRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+    },
+    overlayCell: {
+      width: 28,
+      height: 36,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.7)",
+      backgroundColor: "rgba(255,255,255,0.12)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    overlayText: {
+      color: "#FFFFFF",
+      fontWeight: "900",
+      fontSize: 18,
+    },
+    overlayDash: {
+      width: 16,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    overlayDashText: {
+      color: "rgba(255,215,0,0.95)",
+      fontWeight: "900",
+      fontSize: 22,
+    },
+    detailRow: {
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border2,
+      paddingTop: 8,
+      gap: 4,
+    },
+    detailKey: {
+      color: theme.colors.textMuted,
+      fontSize: theme.font.small,
+      fontWeight: "800",
     },
     linkBtn: {
       alignSelf: "center",

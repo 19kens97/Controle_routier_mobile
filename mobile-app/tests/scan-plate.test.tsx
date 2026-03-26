@@ -4,6 +4,9 @@ import { fireEvent, render, waitFor } from "@testing-library/react-native";
 
 import ScanPlateScreen from "../app/scan-plate";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
+import * as FileSystem from "expo-file-system/legacy";
+import { scanVehiclePlate, searchVehicleByPlate } from "../src/api/vehicles.api";
 
 jest.mock("expo-router", () => ({
   router: {
@@ -21,13 +24,30 @@ jest.mock("expo-image-picker", () => ({
   launchImageLibraryAsync: jest.fn(),
 }));
 
+jest.mock("expo-image-manipulator", () => ({
+  manipulateAsync: jest.fn(),
+  SaveFormat: { JPEG: "jpeg" },
+}));
+
+jest.mock("expo-file-system/legacy", () => ({
+  getInfoAsync: jest.fn(),
+}));
+
 jest.mock("../src/api/vehicles.api", () => ({
   scanVehiclePlate: jest.fn(),
+  searchVehicleByPlate: jest.fn(),
 }));
 
 describe("Scan plate screen", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (ImageManipulator.manipulateAsync as jest.Mock).mockResolvedValue({
+      uri: "file:///optimized.jpg",
+    });
+    (FileSystem.getInfoAsync as jest.Mock).mockResolvedValue({
+      exists: true,
+      size: 1024 * 1024,
+    });
   });
 
   it("requests camera permission when pressing Prendre photo", async () => {
@@ -84,5 +104,54 @@ describe("Scan plate screen", () => {
       expect.stringContaining("active la camera"),
       expect.any(Array)
     );
+  });
+
+  it("loads vehicle details after a successful scan", async () => {
+    (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValueOnce({
+      granted: true,
+    });
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValueOnce({
+      canceled: false,
+      assets: [{ uri: "file:///picked.jpg" }],
+    });
+    (scanVehiclePlate as jest.Mock).mockResolvedValueOnce({
+      data: {
+        success: true,
+        message: "Scan OCR termine",
+        data: {
+          plate: "AB-12345",
+          confidence: 0.92,
+          candidates: ["AB-12345"],
+          raw_text: "AB12345",
+          is_reliable: true,
+          source: "ai",
+        },
+      },
+    });
+    (searchVehicleByPlate as jest.Mock).mockResolvedValueOnce({
+      success: true,
+      message: "Vehicule trouve.",
+      data: {
+        id: 1,
+        plate_number: "AB-12345",
+        brand: "Toyota",
+        model: "Corolla",
+        color: "Blue",
+        year: 2022,
+        vehicle_cards: [{ id: 1, vehicle: 1, card_number: "CV-12345", issue_date: "2025-01-01", expiration_date: "2027-01-01", status: "active", printed_by: "DGI", category: "private" }],
+        insurances: [{ id: 1, vehicle: 1, company_name: "Assur Haiti", policy_number: "POL-9001", issued_date: "2025-01-01", expiration_date: "2026-12-31", is_active: true }],
+        registration: { id: 1, vehicle: 1, registration_code: "REG-HT-9001", registration_type: "standard", issued_date: "2025-01-01", expiry_date: "2026-12-31" },
+      },
+    });
+
+    const { getByText, findByText } = render(<ScanPlateScreen />);
+
+    fireEvent.press(getByText("Choisir photo"));
+    await findByText("Lancer le scan");
+    fireEvent.press(getByText("Lancer le scan"));
+
+    expect(await findByText("Analyse vehicule")).toBeTruthy();
+    expect(await findByText("Vehicule: Toyota Corolla")).toBeTruthy();
+    expect(searchVehicleByPlate).toHaveBeenCalledWith("AB-12345");
   });
 });

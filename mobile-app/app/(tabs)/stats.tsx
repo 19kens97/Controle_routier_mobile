@@ -72,6 +72,7 @@ export default function StatsScreen() {
 
   const sourceLabel = dashboard.source === "live" ? "Source live" : "Mode demonstration";
   const generatedAtLabel = formatGeneratedAt(dashboard.generatedAt);
+  const safeSubheadline = getSafeSubheadline(dashboard.subheadline);
 
   return (
     <Screen>
@@ -113,7 +114,7 @@ export default function StatsScreen() {
           </View>
 
           <Text style={styles.heroHeadline}>{dashboard.headline}</Text>
-          <Text style={styles.heroSubheadline}>{dashboard.subheadline}</Text>
+          <Text style={styles.heroSubheadline}>{safeSubheadline}</Text>
 
           <View style={styles.heroFooter}>
             <View style={styles.heroMeta}>
@@ -175,14 +176,6 @@ export default function StatsScreen() {
             </View>
             <RankingList items={dashboard.hotspots.items} styles={styles} />
           </View>
-        </View>
-
-        <View style={pageStyles.card}>
-          <View style={pageStyles.cardHeader}>
-            <Text style={pageStyles.cardTitle}>{dashboard.agents.title}</Text>
-            <Ionicons name="people-outline" size={20} color={theme.colors.text} />
-          </View>
-          <RankingList items={dashboard.agents.items} styles={styles} />
         </View>
 
         <View style={styles.splitRow}>
@@ -448,6 +441,14 @@ function formatGeneratedAt(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function getSafeSubheadline(subheadline: string) {
+  if (/agent/i.test(subheadline)) {
+    return "Vue generale des controles, zones suivies et alertes utiles, sans detail individuel des agents.";
+  }
+
+  return subheadline;
 }
 
 function createStyles(theme: AppTheme) {
