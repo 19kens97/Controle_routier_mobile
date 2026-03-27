@@ -1,258 +1,62 @@
 # Controle Routier Mobile
 
-Application mobile React Native (Expo) pour les agents de controle routier.
+Application mobile Expo/React Native pour les agents de controle routier.
 
-Ce README decrit l'etat reel de la version mobile au **09 mars 2026**: ce qui est deja implemente, comment c'est structure, comment lancer/tester, et ce qui reste a finaliser.
+## Sommaire
+1. Vue d'ensemble
+2. Stack technique
+3. Installation et lancement
+4. Configuration API
+5. Navigation et pages (entree/sortie)
+6. Couche API mobile (entree/sortie)
+7. Stockage local
+8. Permissions (camera/galerie/notifications)
+9. Scripts et tests
+10. Limitations connues
 
-## 1) Resume de la version mobile
+## Vue d'ensemble
 
-### Deja realise
-- Authentification complete (connexion, oubli de mot de passe, reinitialisation, deconnexion).
-- Navigation principale par onglets (Accueil, Documents, Stats, Profil, Parametres).
-- Tableau de bord agent avec profil, actions rapides, alertes et activite (donnees partiellement mockees).
-- Recherche de documents backend (permis, carte vehicule, assurance, immatriculation).
-- Ecran profil avec edition partielle (prenom, nom, email).
-- Ecran parametres avec persistance locale (theme, langue, texte, notifications, offline, securite locale).
-- Scan OCR de plaque a partir photo/galerie avec selection moteur (AI/Tesseract).
-- Gestion permission camera/galerie dans le flux scan, avec redirection vers les parametres appareil en cas de refus.
-- Couche API centralisee avec injection Bearer token + refresh automatique sur 401.
-- Tests Jest principaux + pipeline CI (lint, typecheck, tests).
+Fonctionnalites principales:
+- Authentification JWT (login, logout, reset password, change password).
+- Dashboard accueil (profil + stats simplifiees + alertes + activite).
+- Recherche documents (permis, carte vehicule, assurance, immatriculation).
+- Scan OCR plaque:
+  - prise photo/galerie,
+  - extraction plaque,
+  - recherche vehicule associe,
+  - affichage des numeros documents associes,
+  - affichage detail document au clic.
+- Ecran statistiques (source backend avec fallback mock).
+- Ecran profil (consultation + edition partielle).
+- Ecran parametres (theme, texte, notif, offline, securite locale).
 
-### Partiellement realise / placeholder
-- Onglet `Stats` (ecran minimal).
-- Plusieurs blocs du dashboard (alertes, activite, sync) sont actuellement locaux/mockes.
-- Modal d'actions (`/modal`) encore simplifie.
-- Verrouillage PIN/biometrie annonce mais non implemente.
-
-## 2) Stack technique
+## Stack technique
 
 - Expo `~54.0.32`
 - React Native `0.81.5`
 - React `19.1.0`
 - TypeScript `~5.9.2`
-- Expo Router `~6.0.22` (routing file-based)
+- Expo Router `~6.0.22`
 - Axios `^1.13.5`
-- Secure token storage: `expo-secure-store`
-- Preferences storage: `@react-native-async-storage/async-storage`
-- Image/camera: `expo-image-picker`
+- Secure storage: `expo-secure-store`
+- Local settings: `@react-native-async-storage/async-storage`
+- Camera/galerie: `expo-image-picker`
+- Notifications: `expo-notifications`
 - Tests: Jest + `@testing-library/react-native`
-- CI: GitHub Actions
 
-## 3) Architecture du projet
+## Installation et lancement
 
-```text
-app/
-  _layout.tsx
-  index.tsx
-  login.tsx
-  forgot-password.tsx
-  reset-password.tsx
-  scan-plate.tsx
-  modal.tsx
-  (tabs)/
-    _layout.tsx
-    index.tsx
-    documents.tsx
-    stats.tsx
-    profile.tsx
-    settings.tsx
-
-src/
-  api/
-    api.ts
-    auth.api.ts
-    users.api.ts
-    documents.api.ts
-    vehicles.api.ts
-  config/
-    api.ts
-  storage/
-    settings.storage.ts
-  utils/
-    auth.ts
-    authEvents.ts
-
-components/
-  screen.tsx
-
-constants/
-  theme.ts
-
-tests/
-  login.test.tsx
-  settings.test.tsx
-  scan-plate.test.tsx
-src/storage/settings.storage.test.ts
-src/utils/authEvents.test.ts
-```
-
-## 4) Navigation et ecrans
-
-### Racine
-- `app/index.tsx`: gate de session, redirige vers `/(tabs)` si token present sinon `/login`.
-- `app/_layout.tsx`: stack global sans header, `SafeAreaProvider` + `StatusBar`.
-
-### Auth
-- `app/login.tsx`
-  - Form username/password.
-  - `POST users/login/`.
-  - Sauvegarde `access_token` + `refresh_token` en SecureStore.
-  - Redirection vers `/(tabs)`.
-- `app/forgot-password.tsx`
-  - Form email.
-  - `POST users/password/reset/`.
-- `app/reset-password.tsx`
-  - Utilise params `uid` + `token` (deep-link/router params).
-  - `POST users/password/reset/confirm/` avec `new_password`.
-
-### Onglets
-- `/(tabs)/index.tsx` (Accueil)
-  - Charge profil backend.
-  - Affiche cards d'alertes/actions/stats/activite.
-  - Certaines donnees sont actuellement mockees dans le composant.
-- `/(tabs)/documents.tsx`
-  - Recherche multi-type de document.
-  - Historique de recherche en memoire (session uniquement).
-- `/(tabs)/profile.tsx`
-  - Lecture profil.
-  - Edition `first_name`, `last_name`, `email`.
-- `/(tabs)/settings.tsx`
-  - Preferences locales + actions compte/securite/support.
-  - Changement mot de passe + deconnexion.
-- `/(tabs)/stats.tsx`
-  - Ecran placeholder.
-
-### Scan OCR plaque
-- `app/scan-plate.tsx`
-  - Selection moteur OCR: `ai` ou `tesseract`.
-  - Choix image galerie ou prise photo camera.
-  - Upload multipart vers backend scan.
-  - Affichage resultat: plaque, confiance, fiabilite, candidats, texte brut.
-
-## 5) Permissions mobile (camera/galerie)
-
-Configuration dans `app.json`:
-- Android:
-  - `android.permission.CAMERA`
-- iOS:
-  - `NSCameraUsageDescription`
-  - `NSPhotoLibraryUsageDescription`
-- Plugin `expo-image-picker` avec messages de permission personnalises.
-
-Comportement en scan:
-- Appel de `requestCameraPermissionsAsync()` au clic `Prendre photo`.
-- Si refuse:
-  - message d'erreur affiche,
-  - alerte proposant `Ouvrir parametres`,
-  - `Linking.openSettings()` ouvre les reglages appareil.
-
-## 6) API integree (etat actuel)
-
-### Client API central (`src/api/api.ts`)
-- Base URL depuis `EXPO_PUBLIC_API_BASE_URL`.
-- Timeout 10s.
-- Injection automatique `Authorization: Bearer <access_token>`.
-- Gestion speciale FormData (suppression `Content-Type` JSON pour multipart).
-- Refresh automatique sur 401 via `users/token/refresh/`.
-- Protection anti-concurrence refresh (single refresh promise).
-- Purge tokens locale si refresh echoue.
-
-### Endpoints utilises
-
-Authentification / compte:
-- `POST users/login/`
-- `POST users/token/refresh/`
-- `POST users/logout/`
-- `POST users/password/reset/`
-- `POST users/password/change/`
-- `POST users/password/reset/confirm/`
-- `GET users/profile/`
-- `PATCH users/profile/update/`
-
-Documents:
-- `GET documents/driver-license/search?license_number=...`
-- `GET documents/vehicle-cards/search/?card_number=...`
-- `GET documents/vehicle-insurances/search/?policy_number=...`
-- `GET documents/registrations/{registration_code}/`
-
-Scan plaque:
-- `POST vehicles/scan-plate/` (multipart: `image`, `engine`)
-
-## 7) Stockage local
-
-### SecureStore
-- `access_token`
-- `refresh_token`
-
-### AsyncStorage
-- Cle: `cr_app_settings_v1`
-- Valeurs:
-  - `themeMode`: `SYSTEM | LIGHT | DARK`
-  - `language`: `FR | HT`
-  - `textSize`: `SMALL | NORMAL | LARGE`
-  - `offlineMode`
-  - `syncPolicy`: `WIFI_ONLY | ALWAYS`
-  - `notifPriorityAlerts`, `notifExpiredDocs`, `notifEndShift`
-  - `maskSensitive`
-
-## 8) UI/Theme
-
-- Composant `Screen` applique un fond gradient global + SafeArea.
-- Tokens centralises dans `constants/theme.ts`:
-  - couleurs surfaces/texte/accent,
-  - radii,
-  - spacing,
-  - tailles typographiques.
-
-## 9) Tests existants
-
-### Tests ecran
-- `tests/login.test.tsx`
-  - connexion succes (save tokens + redirection)
-  - message d'erreur backend
-- `tests/settings.test.tsx`
-  - rendu sections profil/preferences
-  - sauvegarde changement langue
-- `tests/scan-plate.test.tsx`
-  - demande permission camera au clic `Prendre photo`
-  - alerte vers reglages si permission refusee
-
-### Tests utilitaires
-- `src/storage/settings.storage.test.ts`
-  - defaults, merge, JSON invalide, save, reset
-- `src/utils/authEvents.test.ts`
-  - subscribe / unsubscribe event auth
-
-## 10) CI et qualite
-
-Workflow: `.github/workflows/ci.yml`
-- `npm ci`
-- `npm run lint`
-- `npm run typecheck`
-- `npm test`
-
-## 11) Installation et lancement
-
-## Prerequis
+Prerequis:
 - Node.js LTS
 - npm
-- Expo (via `npx expo`)
-- Backend accessible depuis mobile/emulateur
+- Backend Django accessible depuis appareil/emulateur
 
-## Setup
+Installation:
 ```bash
 npm install
 ```
 
-## Environnement
-Creer `.env.local` (ou equivalent) avec:
-```bash
-EXPO_PUBLIC_API_BASE_URL=http://<IP_BACKEND>:8000/api/
-```
-
-Exemple fourni: `.env.example`.
-
-## Run
+Lancement:
 ```bash
 npm run start
 npm run android
@@ -260,30 +64,438 @@ npm run ios
 npm run web
 ```
 
-## Verification locale
+Verification:
 ```bash
 npm run lint
 npm run typecheck
 npm test
 ```
 
-## 12) Limitations connues
+## Configuration API
 
-- Plusieurs textes UI contiennent des problemes d'encodage de caracteres accentues (a normaliser en UTF-8).
-- Dashboard: partie donnees statiques/mockees.
-- `Stats` non fonctionnel (placeholder).
-- `modal.tsx` encore minimal.
-- Pas encore de couverture tests sur tous les flux API/ecrans.
+Fichier de config: `src/config/api.ts`
 
-## 13) Roadmap recommandee
+Priorite de resolution de `API_BASE_URL`:
+1. `EXPO_PUBLIC_API_BASE_URL` si definie.
+2. IP Expo detectee automatiquement (`http://<expo-host-ip>:8000/api/`).
+3. Fallback hardcode: `http://192.168.0.110:8000/api/`.
 
-1. Finaliser les ecrans placeholders (`Stats`, `modal`, actions dashboard).
-2. Uniformiser les reponses backend et messages d'erreur (contrats API).
-3. Corriger/normaliser tous les textes FR encodes.
-4. Ajouter couverture tests sur `documents`, `profile`, `api.ts` (refresh flow).
-5. Ajouter verrouillage local (PIN/biometrie) et durcir les parcours securite.
-6. Brancher une vraie synchronisation offline/online (file d'attente locale).
+Variable a definir recommandee:
+```bash
+EXPO_PUBLIC_API_BASE_URL=http://<IP_BACKEND>:8000/api/
+```
 
----
+## Navigation et pages (entree/sortie)
 
-Projet: CompuConsult - Controle Routier Mobile
+### Route `app/index.tsx`
+- Role: gate d'authentification.
+- Entree:
+  - lit `access_token` local via `isAuthenticated()`.
+- Sortie:
+  - redirige vers `/(tabs)` si token existe.
+  - redirige vers `/login` sinon.
+
+### Route `app/login.tsx`
+- Role: connexion.
+- Entree UI:
+  - `username` (string)
+  - `password` (string)
+- API appelee:
+  - `POST users/login/`
+- Sortie UI:
+  - succes: sauvegarde `access_token` + `refresh_token`, navigation `/(tabs)`.
+  - erreur: message affiche.
+
+### Route `app/forgot-password.tsx`
+- Role: demande de reset.
+- Entree UI:
+  - `email` (string)
+- API appelee:
+  - `POST users/password/reset/`
+- Sortie UI:
+  - succes: message de confirmation.
+  - erreur: message erreur.
+
+### Route `app/reset-password.tsx`
+- Role: confirmation reset.
+- Entree route params:
+  - `uid` (query param)
+  - `token` (query param)
+- Entree UI:
+  - `new_password`
+  - `confirm_password`
+- API appelee:
+  - `POST users/password/reset/confirm/`
+- Sortie UI:
+  - succes: alerte + retour login.
+  - erreur: message.
+
+### Route `app/(tabs)/index.tsx` (Accueil)
+- Role: dashboard accueil.
+- APIs appelees:
+  - `GET users/profile/`
+  - `GET stats/home-dashboard/`
+- Entree:
+  - aucune saisie obligatoire.
+- Sortie UI:
+  - affiche infos agent, alertes, activite, stats resumee.
+  - quick actions vers scan, documents, modal.
+
+### Route `app/(tabs)/documents.tsx`
+- Role: recherche multi-documents.
+- Entree UI:
+  - `docType` parmi `DRIVER_LICENSE | VEHICLE_CARD | VEHICLE_INSURANCE | VEHICLE_REGISTRATION`
+  - `query` (numero/code)
+- APIs appelees selon type:
+  - `GET documents/driver-license/search?license_number=...`
+  - `GET documents/vehicle-cards/search/?card_number=...`
+  - `GET documents/vehicle-insurances/search/?policy_number=...`
+  - `GET documents/registrations/{registration_code}/`
+- Sortie UI:
+  - affichage du document brut (key/value).
+  - historique de recherches (session seulement).
+
+### Route `app/scan-plate.tsx`
+- Role: workflow scan complet.
+- Entree UI:
+  - source image: galerie ou camera.
+  - confirmation/edition plaque detectee.
+- APIs appelees:
+  - `POST vehicles/scan-plate/` (multipart `image`, `engine=ai`)
+  - `GET vehicles/search/?plate_number=...`
+  - au clic sur document:
+    - `GET documents/vehicle-cards/search/?card_number=...` ou
+    - `GET documents/vehicle-insurances/search/?policy_number=...` ou
+    - `GET documents/registrations/{registration_code}/`
+- Sortie UI:
+  - resultat OCR (`plate`, `confidence`, `candidates`, `raw_text`, `source`).
+  - details vehicule associe.
+  - liste cliquable:
+    - numero carte vehicule,
+    - numero carte d'assurance,
+    - numero papier d'immatriculation.
+  - details du document selectionne.
+
+### Route `app/(tabs)/stats.tsx`
+- Role: dashboard stats detaille.
+- API appelee:
+  - `GET stats/dashboard/`
+- Sortie UI:
+  - si succes: donnees live.
+  - si echec: fallback `mockDashboardStats`.
+
+### Route `app/(tabs)/profile.tsx`
+- Role: consultation + edition profil.
+- APIs appelees:
+  - `GET users/profile/`
+  - `PATCH users/profile/update/`
+- Entree edition:
+  - `first_name`, `last_name`, `email`
+- Sortie UI:
+  - profil mis a jour localement.
+
+### Route `app/(tabs)/settings.tsx`
+- Role: preferences + securite + support.
+- APIs appelees:
+  - `GET users/profile/`
+  - `POST users/password/change/`
+  - `POST users/logout/`
+- Entree UI principale:
+  - Theme, langue, taille texte, offline, sync policy, notifications.
+  - changement mot de passe (`old_password`, `new_password`).
+- Sortie UI:
+  - preferences persistantes localement.
+  - logout local/systeme.
+
+### Route `app/modal.tsx`
+- Role: ecran modal simple (placeholder).
+- Entree:
+  - aucune.
+- Sortie:
+  - message et bouton retour.
+
+## Couche API mobile (entree/sortie)
+
+### Client commun `src/api/api.ts`
+- Base URL: `API_BASE_URL`.
+- Timeout: `60000ms`.
+- Interceptor request:
+  - injecte `Authorization: Bearer <access_token>` si present.
+  - retire `Content-Type` JSON pour `FormData`.
+- Interceptor response:
+  - en cas `401`, tente refresh via `POST users/token/refresh/`.
+  - rejoue la requete originale si refresh OK.
+  - purge tokens si refresh KO.
+
+### `src/api/auth.api.ts`
+
+#### `requestPasswordReset(email: string)`
+- Entree:
+```ts
+email: string
+```
+- Sortie:
+```ts
+Promise<any> // backend response object
+```
+
+#### `changePassword(old_password: string, new_password: string)`
+- Entree:
+```ts
+old_password: string
+new_password: string
+```
+- Sortie:
+```ts
+Promise<any>
+```
+
+#### `logout(refresh: string)`
+- Entree:
+```ts
+refresh: string
+```
+- Sortie:
+```ts
+Promise<any>
+```
+
+### `src/api/users.api.ts`
+
+#### `getUserProfile()`
+- Entree: aucune.
+- Sortie:
+```ts
+Promise<{
+  success?: boolean;
+  message?: string;
+  data: UserProfile;
+}>
+```
+
+`UserProfile`:
+```ts
+{
+  username: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string;
+  role: string;
+  nif?: string | null;
+  date_of_birth?: string | null;
+  phone_number?: string | null;
+}
+```
+
+#### `updateUserProfile(payload)`
+- Entree:
+```ts
+Partial<{
+  first_name: string;
+  last_name: string;
+  email: string;
+}>
+```
+- Sortie:
+```ts
+Promise<{ message?: string; data?: Partial<UserProfile> }>
+```
+
+### `src/api/documents.api.ts`
+
+#### `searchDriverLicense(license_number)`
+- Entree:
+```ts
+license_number: string
+```
+- Sortie:
+```ts
+Promise<any> // objet permis (backend brut)
+```
+
+#### `searchVehicleCard(card_number)`
+- Entree:
+```ts
+card_number: string
+```
+- Sortie:
+```ts
+Promise<any> // objet carte vehicule
+```
+
+#### `searchVehicleInsurance(policy_number)`
+- Entree:
+```ts
+policy_number: string
+```
+- Sortie:
+```ts
+Promise<any> // objet assurance
+```
+
+#### `getVehicleRegistrationByCode(registration_code)`
+- Entree:
+```ts
+registration_code: string
+```
+- Sortie:
+```ts
+Promise<any> // objet immatriculation
+```
+
+### `src/api/vehicles.api.ts`
+
+Types exposes:
+- `OcrEngine = "ai" | "tesseract"`
+- `PlateScanData`
+- `PlateScanResponse`
+- `VehicleLookupData`
+- `VehicleLookupResponse`
+
+#### `scanVehiclePlate(imageUri, engine)`
+- Entree:
+```ts
+imageUri: string
+engine: "ai" | "tesseract"
+```
+- Sortie:
+```ts
+Promise<{
+  data: {
+    success: boolean;
+    message: string;
+    data: {
+      plate: string | null;
+      confidence: number;
+      candidates: string[];
+      raw_text: string;
+      is_reliable: boolean;
+      source: string;
+    };
+  };
+}>
+```
+
+#### `searchVehicleByPlate(plateNumber)`
+- Entree:
+```ts
+plateNumber: string // format attendu AA-12345
+```
+- Sortie:
+```ts
+Promise<{
+  success: boolean;
+  message: string;
+  data: VehicleLookupData;
+}>
+```
+
+### `src/api/home.api.ts`
+
+#### `fetchHomeDashboard()`
+- Entree: aucune.
+- Sortie:
+```ts
+Promise<HomeDashboardData>
+```
+
+`HomeDashboardData`:
+```ts
+{
+  sync: { online: boolean; pendingCount: number; lastUpdatedAt: string; };
+  stats: { primaryLabel: string; primaryValue: string; secondaryLabel: string; secondaryValue: string; };
+  alerts: { id: string; title: string; desc: string; level: "HIGH" | "MEDIUM"; }[];
+  activity: { id: string; title: string; subtitle: string; status: "SUCCESS" | "WARNING" | "NEUTRAL"; }[];
+}
+```
+
+### `src/api/stats.api.ts`
+
+#### `fetchDashboardStats()`
+- Entree: aucune.
+- Sortie:
+```ts
+Promise<Omit<DashboardStats, "source">>
+```
+
+`DashboardStats` (vue UI):
+```ts
+{
+  source: "live" | "mock";
+  generatedAt: string;
+  headline: string;
+  subheadline: string;
+  metrics: StatsMetric[];
+  activity: { title: string; points: ActivityPoint[]; };
+  infractions: { title: string; items: DistributionItem[]; };
+  hotspots: { title: string; items: RankingItem[]; };
+  agents: { title: string; items: RankingItem[]; };
+  recentActivity: RecentActivityItem[];
+  alerts: AlertItem[];
+}
+```
+
+## Stockage local
+
+### SecureStore
+- `access_token`
+- `refresh_token`
+
+### AsyncStorage (`cr_app_settings_v1`)
+Structure `AppSettings`:
+- `themeMode`: `SYSTEM | DARK | LIGHT`
+- `language`: `FR | HT`
+- `textSize`: `SMALL | NORMAL | LARGE`
+- `offlineMode`: `boolean`
+- `syncPolicy`: `WIFI_ONLY | ALWAYS`
+- `notifEnabled`: `boolean`
+- `notifPriorityAlerts`: `boolean`
+- `notifExpiredDocs`: `boolean`
+- `notifEndShift`: `boolean`
+- `maskSensitive`: `boolean`
+
+## Permissions (camera/galerie/notifications)
+
+### Camera et galerie
+Utilise `expo-image-picker`.
+
+Flux scan:
+1. Demande permission camera/galerie.
+2. Si refusee:
+  - message d'erreur,
+  - proposition d'ouverture des reglages (`Linking.openSettings()`).
+
+### Notifications
+Utilise `expo-notifications`.
+
+Comportement settings:
+- demande permission systeme si activation.
+- si refuse, proposition d'ouverture des reglages.
+- bouton notification de test.
+
+## Scripts et tests
+
+Scripts npm:
+- `npm run start`
+- `npm run android`
+- `npm run ios`
+- `npm run web`
+- `npm run lint`
+- `npm run typecheck`
+- `npm test`
+- `npm run test:watch`
+
+Tests presents:
+- `tests/login.test.tsx`
+- `tests/settings.test.tsx`
+- `tests/scan-plate.test.tsx`
+- `src/storage/settings.storage.test.ts`
+- `src/utils/authEvents.test.ts`
+
+## Limitations connues
+
+- Contrat backend mixte (reponses wrappees + non wrappees), gere au cas par cas dans l'app.
+- Certains textes UI ont encore des accents mal encodes.
+- `modal.tsx` reste un placeholder.
+- Quelques flux restent a completer cote backend (infractions/tickets).
+

@@ -41,28 +41,14 @@ type ScanResult = {
   source: string;
 };
 
-type RelatedDocumentState = {
-  vehicleCard: any | null;
-  insurance: any | null;
-  registration: any | null;
+type DocumentReferenceType = "vehicleCard" | "insurance" | "registration";
+
+type SelectedDocumentState = {
+  type: DocumentReferenceType;
+  label: string;
+  number: string;
+  data: any;
 };
-
-const PLATE_FORMAT_REGEX = /^[A-Z]{2}-\d{5}$/;
-
-function normalizePlateInput(value: string): string {
-  const cleaned = (value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  const letters = cleaned
-    .slice(0, 2)
-    .replace(/[^A-Z]/g, "");
-  const digits = cleaned
-    .slice(2)
-    .replace(/[^0-9]/g, "")
-    .slice(0, 5);
-
-  if (!letters && !digits) return "";
-  if (letters.length < 2) return letters;
-  return digits.length ? `${letters}-${digits}` : `${letters}-`;
-}
 
 function normalizeValue(value: unknown): string {
   if (value === null || value === undefined) return "-";
@@ -81,39 +67,6 @@ function prettyKey(key: string) {
   return key.replaceAll("_", " ");
 }
 
-function PlateGuide({ styles }: { styles: ReturnType<typeof createStyles> }) {
-  return (
-    <View style={styles.overlayCard}>
-      <View style={styles.overlayRow}>
-        <View style={styles.overlayCell}>
-          <Text style={styles.overlayText}>A</Text>
-        </View>
-        <View style={styles.overlayCell}>
-          <Text style={styles.overlayText}>A</Text>
-        </View>
-        <View style={styles.overlayDash}>
-          <Text style={styles.overlayDashText}>-</Text>
-        </View>
-        <View style={styles.overlayCell}>
-          <Text style={styles.overlayText}>1</Text>
-        </View>
-        <View style={styles.overlayCell}>
-          <Text style={styles.overlayText}>2</Text>
-        </View>
-        <View style={styles.overlayCell}>
-          <Text style={styles.overlayText}>3</Text>
-        </View>
-        <View style={styles.overlayCell}>
-          <Text style={styles.overlayText}>4</Text>
-        </View>
-        <View style={styles.overlayCell}>
-          <Text style={styles.overlayText}>5</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
 export default function ScanPlateScreen() {
   const { theme } = useAppTheme();
   const pageStyles = useMemo(() => createPageStyles(theme), [theme]);
@@ -126,9 +79,11 @@ export default function ScanPlateScreen() {
   const [plateQuery, setPlateQuery] = useState("");
   const [vehicleData, setVehicleData] = useState<VehicleLookupData | null>(null);
   const [vehicleLookupError, setVehicleLookupError] = useState<string | null>(null);
-  const [relatedDocuments, setRelatedDocuments] = useState<RelatedDocumentState | null>(null);
   const [documentLookupError, setDocumentLookupError] = useState<string | null>(null);
   const [documentLoading, setDocumentLoading] = useState(false);
+  const [documentDetailsLoading, setDocumentDetailsLoading] = useState(false);
+  const [documentDetailsError, setDocumentDetailsError] = useState<string | null>(null);
+  const [selectedDocument, setSelectedDocument] = useState<SelectedDocumentState | null>(null);
 
   const confidenceLabel = useMemo(() => {
     if (!result) return "";
@@ -145,10 +100,34 @@ export default function ScanPlateScreen() {
     return result.source;
   }, [result]);
 
-  const isPlateQueryValid = useMemo(
-    () => PLATE_FORMAT_REGEX.test(plateQuery),
-    [plateQuery]
-  );
+  const documentReferences = useMemo(() => {
+    if (!vehicleData) return [];
+
+    const firstCard = vehicleData.vehicle_cards[0]?.card_number;
+    const firstInsurance = vehicleData.insurances[0]?.policy_number;
+    const registrationCode = vehicleData.registration?.registration_code;
+
+    return [
+      {
+        type: "vehicleCard" as const,
+        label: "Numero carte vehicule",
+        number: firstCard || "-",
+        isAvailable: Boolean(firstCard),
+      },
+      {
+        type: "insurance" as const,
+        label: "Numero carte d'assurance",
+        number: firstInsurance || "-",
+        isAvailable: Boolean(firstInsurance),
+      },
+      {
+        type: "registration" as const,
+        label: "Numero papier d'immatriculation",
+        number: registrationCode || "-",
+        isAvailable: Boolean(registrationCode),
+      },
+    ];
+  }, [vehicleData]);
 
   const promptOpenSettings = () => {
     Alert.alert(
@@ -218,41 +197,15 @@ export default function ScanPlateScreen() {
     setPlateQuery("");
     setVehicleData(null);
     setVehicleLookupError(null);
-    setRelatedDocuments(null);
     setDocumentLookupError(null);
+    setSelectedDocument(null);
+    setDocumentDetailsError(null);
   };
 
   const loadVehicleByPlate = async (plateNumber: string) => {
     const vehicleResponse = await searchVehicleByPlate(plateNumber);
     setVehicleData(vehicleResponse.data);
     return vehicleResponse.data;
-  };
-
-  const loadRelatedDocuments = async (vehicle: VehicleLookupData) => {
-    const firstCard = vehicle.vehicle_cards[0];
-    const firstInsurance = vehicle.insurances[0];
-    const registrationCode = vehicle.registration?.registration_code;
-
-    const docs: RelatedDocumentState = {
-      vehicleCard: null,
-      insurance: null,
-      registration: null,
-    };
-
-    if (firstCard?.card_number) {
-      docs.vehicleCard = await searchVehicleCard(firstCard.card_number);
-    }
-
-    if (firstInsurance?.policy_number) {
-      docs.insurance = await searchVehicleInsurance(firstInsurance.policy_number);
-    }
-
-    if (registrationCode) {
-      docs.registration = await getVehicleRegistrationByCode(registrationCode);
-    }
-
-    setRelatedDocuments(docs);
-    return docs;
   };
 
   const searchDocumentsFromPlate = async (rawPlate?: string) => {
@@ -266,11 +219,11 @@ export default function ScanPlateScreen() {
     setDocumentLoading(true);
     setDocumentLookupError(null);
     setVehicleLookupError(null);
-    setRelatedDocuments(null);
+    setSelectedDocument(null);
+    setDocumentDetailsError(null);
 
     try {
-      const vehicle = await loadVehicleByPlate(value);
-      await loadRelatedDocuments(vehicle);
+      await loadVehicleByPlate(value);
       setPlateQuery(value);
     } catch (lookupErr: any) {
       const status = lookupErr?.response?.status;
@@ -290,6 +243,58 @@ export default function ScanPlateScreen() {
       }
     } finally {
       setDocumentLoading(false);
+    }
+  };
+
+  const loadDocumentDetails = async (
+    docType: DocumentReferenceType,
+    label: string,
+    number: string
+  ) => {
+    if (!number || number === "-") {
+      setDocumentDetailsError("Aucun numero disponible pour ce document.");
+      return;
+    }
+
+    setDocumentDetailsLoading(true);
+    setDocumentDetailsError(null);
+    setSelectedDocument(null);
+
+    try {
+      let data: any = null;
+
+      if (docType === "vehicleCard") {
+        data = await searchVehicleCard(number);
+      } else if (docType === "insurance") {
+        data = await searchVehicleInsurance(number);
+      } else {
+        data = await getVehicleRegistrationByCode(number);
+      }
+
+      setSelectedDocument({
+        type: docType,
+        label,
+        number,
+        data,
+      });
+    } catch (lookupErr: any) {
+      const status = lookupErr?.response?.status;
+      const lookupMessage =
+        lookupErr?.response?.data?.message ||
+        lookupErr?.response?.data?.detail ||
+        lookupErr?.message;
+
+      if (status === 404) {
+        setDocumentDetailsError("Document introuvable pour ce numero.");
+      } else {
+        setDocumentDetailsError(
+          typeof lookupMessage === "string" && lookupMessage
+            ? lookupMessage
+            : "Impossible de charger les details du document selectionne."
+        );
+      }
+    } finally {
+      setDocumentDetailsLoading(false);
     }
   };
 
@@ -370,13 +375,14 @@ export default function ScanPlateScreen() {
     setPlateQuery("");
     setVehicleData(null);
     setVehicleLookupError(null);
-    setRelatedDocuments(null);
     setDocumentLookupError(null);
+    setSelectedDocument(null);
+    setDocumentDetailsError(null);
 
     try {
       const response = await scanVehiclePlate(imageUri, "ai");
       setResult(response.data.data);
-      setPlateQuery(normalizePlateInput(response.data.data.plate ?? ""));
+      setPlateQuery((response.data.data.plate ?? "").toUpperCase());
 
       if (response.data.data.plate) {
         try {
@@ -447,7 +453,7 @@ export default function ScanPlateScreen() {
           </View>
 
           <Text style={styles.helperText}>
-            Cadre la plaque dans le gabarit `AA-12345`, puis laisse l'application choisir le meilleur mode de lecture.
+            Cadre la plaque et laisse l'application envoyer l'image au backend pour analyse.
           </Text>
 
           <View style={styles.actionRow}>
@@ -471,9 +477,6 @@ export default function ScanPlateScreen() {
                 </Text>
               </View>
             )}
-            <View pointerEvents="none" style={styles.overlayLayer}>
-              <PlateGuide styles={styles} />
-            </View>
           </View>
 
           <Pressable
@@ -517,12 +520,12 @@ export default function ScanPlateScreen() {
               <TextInput
                 value={plateQuery}
                 onChangeText={(value) => {
-                  setPlateQuery(normalizePlateInput(value));
+                  setPlateQuery(value.toUpperCase());
                   if (documentLookupError) {
                     setDocumentLookupError(null);
                   }
                 }}
-                placeholder="Ex: AA-12345"
+                placeholder="Ex: AB12345 ou AB-12345"
                 placeholderTextColor={theme.colors.textDim}
                 autoCapitalize="characters"
                 style={styles.input}
@@ -531,22 +534,17 @@ export default function ScanPlateScreen() {
               />
 
               <Text style={styles.helperText}>
-                Format attendu: 2 lettres, un tiret, puis 5 chiffres.
+                Le format final est interprete et decoupe cote backend.
               </Text>
-              {!isPlateQueryValid && plateQuery.length > 0 ? (
-                <Text style={styles.warningText}>
-                  L'immatriculation doit respecter le format `AA-12345`.
-                </Text>
-              ) : null}
 
               <Pressable
                 style={[
                   pageStyles.primaryButton,
-                  !isPlateQueryValid && { opacity: 0.6 },
+                  !plateQuery.trim() && { opacity: 0.6 },
                   documentLoading && { opacity: 0.7 },
                 ]}
                 onPress={() => searchDocumentsFromPlate()}
-                disabled={documentLoading || !isPlateQueryValid}
+                disabled={documentLoading || !plateQuery.trim()}
               >
                 {documentLoading ? (
                   <View style={styles.loadingRow}>
@@ -593,34 +591,45 @@ export default function ScanPlateScreen() {
             </View>
           ) : null}
 
-          {relatedDocuments?.vehicleCard ? (
+          {vehicleData ? (
             <View style={styles.resultBox}>
-              <Text style={styles.resultTitle}>Document carte vehicule</Text>
-              {Object.entries(relatedDocuments.vehicleCard).map(([key, value]) => (
-                <View key={key} style={styles.detailRow}>
-                  <Text style={styles.detailKey}>{prettyKey(key)}</Text>
-                  <Text style={styles.value}>{normalizeValue(value)}</Text>
-                </View>
+              <Text style={styles.resultTitle}>Documents associes</Text>
+              <Text style={styles.helperText}>
+                Clique sur le type de papier pour afficher les details correspondants.
+              </Text>
+              {documentReferences.map((item) => (
+                <Pressable
+                  key={item.type}
+                  style={[
+                    styles.docItem,
+                    !item.isAvailable && { opacity: 0.6 },
+                  ]}
+                  onPress={() => loadDocumentDetails(item.type, item.label, item.number)}
+                  disabled={!item.isAvailable || documentDetailsLoading}
+                >
+                  <Text style={styles.docItemLabel}>{item.label}</Text>
+                  <Text style={styles.docItemNumber}>{item.number}</Text>
+                </Pressable>
               ))}
+
+              {documentDetailsLoading ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator color="#000" size="small" />
+                  <Text style={styles.scanBtnText}>Chargement du document...</Text>
+                </View>
+              ) : null}
+
+              {documentDetailsError ? (
+                <Text style={styles.errorText}>{documentDetailsError}</Text>
+              ) : null}
             </View>
           ) : null}
 
-          {relatedDocuments?.insurance ? (
+          {selectedDocument ? (
             <View style={styles.resultBox}>
-              <Text style={styles.resultTitle}>Document assurance</Text>
-              {Object.entries(relatedDocuments.insurance).map(([key, value]) => (
-                <View key={key} style={styles.detailRow}>
-                  <Text style={styles.detailKey}>{prettyKey(key)}</Text>
-                  <Text style={styles.value}>{normalizeValue(value)}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
-
-          {relatedDocuments?.registration ? (
-            <View style={styles.resultBox}>
-              <Text style={styles.resultTitle}>Document immatriculation</Text>
-              {Object.entries(relatedDocuments.registration).map(([key, value]) => (
+              <Text style={styles.resultTitle}>Details: {selectedDocument.label}</Text>
+              <Text style={styles.value}>Numero: {selectedDocument.number}</Text>
+              {Object.entries(selectedDocument.data).map(([key, value]) => (
                 <View key={key} style={styles.detailRow}>
                   <Text style={styles.detailKey}>{prettyKey(key)}</Text>
                   <Text style={styles.value}>{normalizeValue(value)}</Text>
@@ -702,11 +711,6 @@ function createStyles(theme: AppTheme) {
       fontWeight: "700",
       textAlign: "center",
     },
-    overlayLayer: {
-      ...StyleSheet.absoluteFillObject,
-      alignItems: "center",
-      justifyContent: "center",
-    },
     scanBtnText: {
       color: theme.colors.text,
       fontWeight: "900",
@@ -756,54 +760,6 @@ function createStyles(theme: AppTheme) {
       fontSize: theme.font.body,
       fontWeight: "900",
     },
-    overlayCard: {
-      width: "84%",
-      maxWidth: 320,
-      minHeight: 70,
-      borderRadius: theme.radius.md,
-      borderWidth: 2,
-      borderColor: "rgba(255,215,0,0.95)",
-      backgroundColor: "rgba(0,0,0,0.30)",
-      paddingHorizontal: 10,
-      paddingVertical: 12,
-      justifyContent: "center",
-      shadowColor: "#000",
-      shadowOpacity: 0.16,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 3,
-    },
-    overlayRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 6,
-    },
-    overlayCell: {
-      width: 28,
-      height: 36,
-      borderRadius: 8,
-      borderWidth: 1,
-      borderColor: "rgba(255,255,255,0.7)",
-      backgroundColor: "rgba(255,255,255,0.12)",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    overlayText: {
-      color: "#FFFFFF",
-      fontWeight: "900",
-      fontSize: 18,
-    },
-    overlayDash: {
-      width: 16,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    overlayDashText: {
-      color: "rgba(255,215,0,0.95)",
-      fontWeight: "900",
-      fontSize: 22,
-    },
     detailRow: {
       borderTopWidth: 1,
       borderTopColor: theme.colors.border2,
@@ -814,6 +770,23 @@ function createStyles(theme: AppTheme) {
       color: theme.colors.textMuted,
       fontSize: theme.font.small,
       fontWeight: "800",
+    },
+    docItem: {
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border2,
+      paddingTop: 10,
+      paddingBottom: 6,
+      gap: 4,
+    },
+    docItemLabel: {
+      color: theme.colors.textMuted,
+      fontSize: theme.font.small,
+      fontWeight: "800",
+    },
+    docItemNumber: {
+      color: theme.colors.text,
+      fontSize: theme.font.body,
+      fontWeight: "900",
     },
     linkBtn: {
       alignSelf: "center",
