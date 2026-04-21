@@ -1,13 +1,58 @@
 import React from "react";
-import { Tabs } from "expo-router";
+import { ActivityIndicator, View } from "react-native";
+import { Redirect, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { getTabBarColors } from "../../constants/theme";
 import { useAppTheme } from "../../src/providers/theme.provider";
+import { isAuthenticated } from "../../src/utils/auth";
+import { onAuthChanged } from "../../src/utils/authEvents";
 
 export default function TabsLayout() {
-  const { resolvedTheme } = useAppTheme();
+  const { resolvedTheme, theme } = useAppTheme();
   const tabBarColors = getTabBarColors(resolvedTheme);
+  const [ready, setReady] = React.useState(false);
+  const [auth, setAuth] = React.useState(false);
+
+  React.useEffect(() => {
+    let mounted = true;
+
+    const refreshAuth = async () => {
+      const ok = await isAuthenticated();
+      if (!mounted) return;
+      setAuth(ok);
+      setReady(true);
+    };
+
+    void refreshAuth();
+    const unsubscribe = onAuthChanged(() => {
+      void refreshAuth();
+    });
+
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, []);
+
+  if (!ready) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: theme.colors.bg0,
+        }}
+      >
+        <ActivityIndicator color={theme.colors.text} />
+      </View>
+    );
+  }
+
+  if (!auth) {
+    return <Redirect href="/login" />;
+  }
 
   return (
     <Tabs

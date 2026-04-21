@@ -2,7 +2,7 @@ import * as SecureStore from "expo-secure-store";
 import { API_BASE_URL } from "../config/api";
 import api from "./api";
 
-export type OcrEngine = "ai" | "tesseract";
+export type OcrEngine = "ai" | "tesseract" | "openalpr" | "gemini";
 
 export type PlateScanData = {
   plate: string | null;

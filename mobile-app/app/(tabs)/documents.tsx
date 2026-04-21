@@ -12,6 +12,7 @@ import {
 import Screen from "../../components/screen";
 import { AppTheme } from "../../constants/theme";
 import { useAppTheme } from "../../src/providers/theme.provider";
+import { getApiErrorMessage } from "../../src/utils/apiErrors";
 import {
   DocumentType,
   getVehicleDossierByPlate,
@@ -88,20 +89,6 @@ function normalizePlateNumberInput(value: string): string {
   return raw;
 }
 
-function extractApiError(e: any): string {
-  const status = e?.response?.status;
-  const backendDetail =
-    e?.response?.data?.detail ||
-    e?.response?.data?.message ||
-    e?.response?.data ||
-    null;
-
-  if (status === 404) return "Document ou vehicule introuvable.";
-  if (status === 400) return typeof backendDetail === "string" ? backendDetail : "Requete invalide.";
-  if (status === 401) return "Session expiree. Veuillez vous reconnecter.";
-  return typeof backendDetail === "string" ? backendDetail : "Erreur reseau ou serveur.";
-}
-
 export default function DocumentsScreen() {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -154,7 +141,12 @@ export default function DocumentsScreen() {
       setResult(data);
       setHistory((prev) => [{ type: docType, query: effectiveQuery, at: Date.now() }, ...prev].slice(0, 8));
     } catch (e: any) {
-      setErrorMsg(extractApiError(e));
+      setErrorMsg(
+        getApiErrorMessage(e, {
+          notFound: "Document ou vehicule introuvable.",
+          fallback: "Impossible de finaliser la recherche pour le moment.",
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -176,7 +168,12 @@ export default function DocumentsScreen() {
       setDossierSection(section);
       setQuery(normalizedPlate);
     } catch (e: any) {
-      setErrorMsg(extractApiError(e));
+      setErrorMsg(
+        getApiErrorMessage(e, {
+          notFound: "Aucun dossier trouve pour cette immatriculation.",
+          fallback: "Impossible de charger cette section du dossier.",
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -247,7 +244,14 @@ export default function DocumentsScreen() {
               pressed && canSearch && { opacity: 0.9 },
             ]}
           >
-            {loading ? <ActivityIndicator /> : <Text style={styles.btnText}>Rechercher</Text>}
+            {loading ? (
+              <View style={styles.btnLoadingRow}>
+                <ActivityIndicator />
+                <Text style={styles.btnText}>Recherche...</Text>
+              </View>
+            ) : (
+              <Text style={styles.btnText}>Rechercher</Text>
+            )}
           </Pressable>
 
           {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}
@@ -409,6 +413,11 @@ function createStyles(theme: AppTheme) {
       borderColor: theme.colors.accentBorder,
     },
     btnText: { color: theme.colors.text, fontWeight: "900", fontSize: theme.font.body },
+    btnLoadingRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
 
     error: { color: theme.colors.danger, fontWeight: "800", fontSize: theme.font.small },
 

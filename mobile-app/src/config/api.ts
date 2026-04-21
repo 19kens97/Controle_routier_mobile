@@ -1,6 +1,7 @@
 import Constants from "expo-constants";
 
-const HARDCODED_FALLBACK_API_BASE_URL = "http://192.168.0.110:8000/api/";
+const DEV_LOOPBACK_API_BASE_URL = "http://127.0.0.1:8000/api/";
+const PROD_FALLBACK_API_BASE_URL = "https://api.controle-routier.local/api/";
 
 function extractExpoHostIp(hostUri?: string | null): string | null {
   if (!hostUri) return null;
@@ -28,11 +29,21 @@ function getExpoDevApiBaseUrl(): string | null {
 }
 
 const DEFAULT_DEV_API_BASE_URL =
-  getExpoDevApiBaseUrl() ?? HARDCODED_FALLBACK_API_BASE_URL;
+  getExpoDevApiBaseUrl() ?? DEV_LOOPBACK_API_BASE_URL;
+
+function enforceSecureProtocol(url: string): string {
+  if (__DEV__) return url;
+  if (url.toLowerCase().startsWith("http://")) {
+    return `https://${url.slice("http://".length)}`;
+  }
+  return url;
+}
 
 function normalizeApiBaseUrl(url: string): string {
-  const trimmed = url.trim();
-  if (!trimmed) return DEFAULT_DEV_API_BASE_URL;
+  const trimmed = enforceSecureProtocol(url.trim());
+  if (!trimmed) {
+    return __DEV__ ? DEFAULT_DEV_API_BASE_URL : PROD_FALLBACK_API_BASE_URL;
+  }
   return trimmed.endsWith("/") ? trimmed : `${trimmed}/`;
 }
 

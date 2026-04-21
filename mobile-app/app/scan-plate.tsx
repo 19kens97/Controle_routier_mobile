@@ -21,11 +21,9 @@ import { AppTheme } from "../constants/theme";
 import { API_BASE_URL } from "../src/config/api";
 import { useAppTheme } from "../src/providers/theme.provider";
 import { createPageStyles } from "../src/ui/page-styles";
-import {
-  scanVehiclePlate,
-  searchVehicleByPlate,
-  VehicleLookupData,
-} from "../src/api/vehicles.api";
+import { getApiErrorMessage } from "../src/utils/apiErrors";
+import { searchVehicleByPlate, VehicleLookupData } from "../src/api/vehicles.api";
+import { scanGeminiDirect } from "../src/api/gemini.api";
 import {
   getVehicleRegistrationByCode,
   searchVehicleCard,
@@ -42,12 +40,14 @@ type ScanResult = {
 };
 
 type DocumentReferenceType = "vehicleCard" | "insurance" | "registration";
+const SEND_RAW_SCAN_IMAGE = true;
+const OCR_ENGINE_FOR_SCAN = "gemini-backend";
 
 type SelectedDocumentState = {
   type: DocumentReferenceType;
   label: string;
   number: string;
-  data: any;
+  data: Record<string, unknown>;
 };
 
 function normalizeValue(value: unknown): string {
@@ -67,6 +67,13 @@ function prettyKey(key: string) {
   return key.replaceAll("_", " ");
 }
 
+function toRecord(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return { value };
+}
+
 export default function ScanPlateScreen() {
   const { theme } = useAppTheme();
   const pageStyles = useMemo(() => createPageStyles(theme), [theme]);
@@ -84,6 +91,7 @@ export default function ScanPlateScreen() {
   const [documentDetailsLoading, setDocumentDetailsLoading] = useState(false);
   const [documentDetailsError, setDocumentDetailsError] = useState<string | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<SelectedDocumentState | null>(null);
+  const [modelUsed, setModelUsed] = useState<string | null>(null);
 
   const confidenceLabel = useMemo(() => {
     if (!result) return "";
@@ -97,6 +105,7 @@ export default function ScanPlateScreen() {
     if (result.source === "full") return "Image complete";
     if (result.source === "ai") return "Pipeline AI";
     if (result.source === "openalpr") return "OpenALPR";
+    if (result.source === "gemini") return "Gemini";
     return result.source;
   }, [result]);
 
@@ -190,9 +199,14 @@ export default function ScanPlateScreen() {
   };
 
   const prepareSelectedImage = async (uri: string) => {
-    const optimizedUri = await optimizeImage(uri);
-    await validateImageSize(optimizedUri);
-    setImageUri(optimizedUri);
+    if (SEND_RAW_SCAN_IMAGE) {
+      await validateImageSize(uri);
+      setImageUri(uri);
+    } else {
+      const optimizedUri = await optimizeImage(uri);
+      await validateImageSize(optimizedUri);
+      setImageUri(optimizedUri);
+    }
     setResult(null);
     setPlateQuery("");
     setVehicleData(null);
@@ -200,6 +214,7 @@ export default function ScanPlateScreen() {
     setDocumentLookupError(null);
     setSelectedDocument(null);
     setDocumentDetailsError(null);
+    setModelUsed(null);
   };
 
   const loadVehicleByPlate = async (plateNumber: string) => {
@@ -226,21 +241,12 @@ export default function ScanPlateScreen() {
       await loadVehicleByPlate(value);
       setPlateQuery(value);
     } catch (lookupErr: any) {
-      const status = lookupErr?.response?.status;
-      const lookupMessage =
-        lookupErr?.response?.data?.message ||
-        lookupErr?.response?.data?.detail ||
-        lookupErr?.message;
-
-      if (status === 404) {
-        setDocumentLookupError("Aucun vehicule ou document n'a ete trouve pour cette immatriculation.");
-      } else {
-        setDocumentLookupError(
-          typeof lookupMessage === "string" && lookupMessage
-            ? lookupMessage
-            : "Impossible de charger les informations liees a cette immatriculation."
-        );
-      }
+      setDocumentLookupError(
+        getApiErrorMessage(lookupErr, {
+          notFound: "Aucun vehicule ou document n'a ete trouve pour cette immatriculation.",
+          fallback: "Impossible de charger les informations liees a cette immatriculation.",
+        })
+      );
     } finally {
       setDocumentLoading(false);
     }
@@ -261,38 +267,29 @@ export default function ScanPlateScreen() {
     setSelectedDocument(null);
 
     try {
-      let data: any = null;
+      let data: Record<string, unknown> | null = null;
 
       if (docType === "vehicleCard") {
-        data = await searchVehicleCard(number);
+        data = toRecord(await searchVehicleCard(number));
       } else if (docType === "insurance") {
-        data = await searchVehicleInsurance(number);
+        data = toRecord(await searchVehicleInsurance(number));
       } else {
-        data = await getVehicleRegistrationByCode(number);
+        data = toRecord(await getVehicleRegistrationByCode(number));
       }
 
       setSelectedDocument({
         type: docType,
         label,
         number,
-        data,
+        data: data ?? {},
       });
     } catch (lookupErr: any) {
-      const status = lookupErr?.response?.status;
-      const lookupMessage =
-        lookupErr?.response?.data?.message ||
-        lookupErr?.response?.data?.detail ||
-        lookupErr?.message;
-
-      if (status === 404) {
-        setDocumentDetailsError("Document introuvable pour ce numero.");
-      } else {
-        setDocumentDetailsError(
-          typeof lookupMessage === "string" && lookupMessage
-            ? lookupMessage
-            : "Impossible de charger les details du document selectionne."
-        );
-      }
+      setDocumentDetailsError(
+        getApiErrorMessage(lookupErr, {
+          notFound: "Document introuvable pour ce numero.",
+          fallback: "Impossible de charger les details du document selectionne.",
+        })
+      );
     } finally {
       setDocumentDetailsLoading(false);
     }
@@ -310,7 +307,7 @@ export default function ScanPlateScreen() {
 
       const selected = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
-        quality: 0.7,
+        quality: 1,
         allowsEditing: false,
       });
 
@@ -351,7 +348,7 @@ export default function ScanPlateScreen() {
 
       const captured = await ImagePicker.launchCameraAsync({
         mediaTypes: ["images"],
-        quality: 0.6,
+        quality: 1,
         allowsEditing: false,
       });
 
@@ -378,57 +375,60 @@ export default function ScanPlateScreen() {
     setDocumentLookupError(null);
     setSelectedDocument(null);
     setDocumentDetailsError(null);
+    setModelUsed(null);
 
     try {
-      const response = await scanVehiclePlate(imageUri, "ai");
-      setResult(response.data.data);
-      setPlateQuery((response.data.data.plate ?? "").toUpperCase());
+      const response = await scanGeminiDirect(imageUri);
+      const raw = response.rawResponse ?? {};
+      const plateNumber = (response.plateNumber ?? "").trim().toUpperCase();
+      const confidenceRaw = Number(raw?.data?.confidence ?? raw?.confidence ?? (plateNumber ? 1 : 0));
+      const confidence = Number.isFinite(confidenceRaw) ? Math.max(0, Math.min(1, confidenceRaw)) : 0;
+      const candidates = Array.isArray(raw?.data?.candidates)
+        ? raw.data.candidates
+        : Array.isArray(raw?.candidates)
+          ? raw.candidates
+          : plateNumber
+            ? [plateNumber]
+            : [];
+      const model = typeof raw?.model_used === "string" ? raw.model_used : null;
 
-      if (response.data.data.plate) {
+      setModelUsed(model);
+      setResult({
+        plate: plateNumber || null,
+        confidence,
+        candidates,
+        raw_text: plateNumber,
+        is_reliable: Boolean(plateNumber),
+        source: "gemini",
+      });
+      setPlateQuery(plateNumber);
+
+      if (plateNumber) {
         try {
-          await loadVehicleByPlate(response.data.data.plate);
+          await loadVehicleByPlate(plateNumber);
         } catch (lookupErr: any) {
-          const status = lookupErr?.response?.status;
-          const lookupMessage =
-            lookupErr?.response?.data?.message ||
-            lookupErr?.response?.data?.detail ||
-            lookupErr?.message;
-
-          if (status === 404) {
-            setVehicleLookupError("Plaque detectee, mais vehicule introuvable dans la base.");
-          } else {
-            setVehicleLookupError(
-              typeof lookupMessage === "string" && lookupMessage
-                ? lookupMessage
-                : "Plaque detectee, mais impossible de charger les informations du vehicule."
-            );
-          }
+          setVehicleLookupError(
+            getApiErrorMessage(lookupErr, {
+              notFound: "Plaque detectee, mais vehicule introuvable dans la base.",
+              fallback: "Plaque detectee, mais impossible de charger les informations du vehicule.",
+            })
+          );
         }
       } else {
-        setError(response.data.message || "Aucune plaque fiable n'a ete reconnue.");
+        setError(
+          raw?.message ||
+            raw?.detail ||
+            "Aucune plaque fiable n'a ete reconnue par Gemini."
+        );
       }
     } catch (err: any) {
-      console.log("OCR ERROR:", err);
-      console.log("OCR RESPONSE:", err?.response?.data);
-      console.log("OCR STATUS:", err?.response?.status);
-      console.log("OCR MESSAGE:", err?.message);
-
-      const apiMessage = err?.response?.data?.message;
-
-      if (apiMessage) {
-        setError(apiMessage);
-      } else if (
-        err?.message?.includes("Network Error") ||
-        err?.message?.includes("network request failed")
-      ) {
-        setError(
-          `Connexion au serveur impossible pendant le scan OCR. Serveur actuel: ${API_BASE_URL}`
-        );
-      } else if (err?.code === "ECONNABORTED" || err?.message?.includes("timed out")) {
-        setError("Le scan a pris trop de temps. Reessaie avec une image plus legere.");
-      } else {
-        setError(err?.message || "Echec du scan OCR.");
-      }
+      setError(
+        getApiErrorMessage(err, {
+          network: `Connexion au serveur impossible pendant le scan Gemini. Serveur actuel: ${API_BASE_URL}`,
+          timeout: "Le scan Gemini a pris trop de temps. Reessaie avec une image plus legere.",
+          fallback: "Echec du scan Gemini.",
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -444,7 +444,7 @@ export default function ScanPlateScreen() {
       >
         <Text style={pageStyles.title}>Scanner une plaque</Text>
         <Text style={pageStyles.subtitle}>
-          Charge une photo ou prends une image, puis envoie-la au backend OCR.
+          Charge une photo ou prends une image, puis envoie-la au backend Gemini.
         </Text>
 
         <View style={pageStyles.card}>
@@ -453,8 +453,9 @@ export default function ScanPlateScreen() {
           </View>
 
           <Text style={styles.helperText}>
-            Cadre la plaque et laisse l'application envoyer l'image au backend pour analyse.
+            Cadre la plaque et laisse l'application envoyer l'image au flux principal Gemini.
           </Text>
+          <Text style={styles.helperText}>Moteur actuel: {OCR_ENGINE_FOR_SCAN.toUpperCase()}</Text>
 
           <View style={styles.actionRow}>
             <Pressable style={styles.actionBtn} onPress={pickFromLibrary}>
@@ -496,6 +497,10 @@ export default function ScanPlateScreen() {
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
+          <Pressable style={styles.ticketBtn} onPress={() => router.push("/ticket-create")}>
+            <Text style={styles.ticketBtnText}>Creer un ticket manuellement</Text>
+          </Pressable>
+
           {result ? (
             <View style={styles.resultBox}>
               <Text style={styles.resultTitle}>Resultat</Text>
@@ -503,10 +508,25 @@ export default function ScanPlateScreen() {
               <Text style={styles.value}>Confiance: {confidenceLabel}</Text>
               <Text style={styles.value}>Fiable: {result.is_reliable ? "Oui" : "Non"}</Text>
               <Text style={styles.value}>Source scan: {sourceLabel || "-"}</Text>
+              <Text style={styles.value}>Modele Gemini: {modelUsed || "-"}</Text>
               <Text style={styles.value}>
                 Candidats: {result.candidates.length ? result.candidates.join(", ") : "-"}
               </Text>
               <Text style={styles.value}>Texte brut: {result.raw_text || "-"}</Text>
+
+              <Pressable
+                style={styles.ticketBtn}
+                onPress={() =>
+                  router.push({
+                    pathname: "/ticket-create",
+                    params: result.plate ? { plate: result.plate } : {},
+                  })
+                }
+              >
+                <Text style={styles.ticketBtnText}>
+                  {result.plate ? "Creer un ticket avec cette plaque" : "Creer un ticket manuellement"}
+                </Text>
+              </Pressable>
             </View>
           ) : null}
 
@@ -787,6 +807,20 @@ function createStyles(theme: AppTheme) {
       color: theme.colors.text,
       fontSize: theme.font.body,
       fontWeight: "900",
+    },
+    ticketBtn: {
+      marginTop: 8,
+      borderRadius: theme.radius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.accentBorder,
+      backgroundColor: theme.colors.accentSoft,
+      paddingVertical: 10,
+      alignItems: "center",
+    },
+    ticketBtnText: {
+      color: theme.colors.text,
+      fontWeight: "900",
+      fontSize: theme.font.small,
     },
     linkBtn: {
       alignSelf: "center",

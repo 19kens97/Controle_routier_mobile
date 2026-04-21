@@ -250,8 +250,8 @@ function ActivityChart({
 
   return (
     <View style={styles.chartWrap}>
-      {points.map((point) => (
-        <View key={point.label} style={styles.chartColumn}>
+      {points.map((point, index) => (
+        <View key={`${point.label}-${index}`} style={styles.chartColumn}>
           <Text style={styles.chartValue}>{point.value}</Text>
           <View style={styles.chartTrack}>
             <View
@@ -288,10 +288,10 @@ function DistributionList({
 
   return (
     <View style={styles.stack}>
-      {items.map((item) => {
+      {items.map((item, index) => {
         const ratio = Math.max(item.value / total, 0.08);
         return (
-          <View key={item.label} style={styles.distRow}>
+          <View key={`${item.label}-${index}`} style={styles.distRow}>
             <View style={styles.distHeader}>
               <View style={styles.distTitleRow}>
                 <View style={[styles.distDot, { backgroundColor: item.color || theme.colors.accent }]} />

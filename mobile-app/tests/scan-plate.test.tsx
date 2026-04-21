@@ -6,7 +6,8 @@ import ScanPlateScreen from "../app/scan-plate";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as FileSystem from "expo-file-system/legacy";
-import { scanVehiclePlate, searchVehicleByPlate } from "../src/api/vehicles.api";
+import { searchVehicleByPlate } from "../src/api/vehicles.api";
+import { scanGeminiDirect } from "../src/api/gemini.api";
 
 jest.mock("expo-router", () => ({
   router: {
@@ -34,8 +35,11 @@ jest.mock("expo-file-system/legacy", () => ({
 }));
 
 jest.mock("../src/api/vehicles.api", () => ({
-  scanVehiclePlate: jest.fn(),
   searchVehicleByPlate: jest.fn(),
+}));
+
+jest.mock("../src/api/gemini.api", () => ({
+  scanGeminiDirect: jest.fn(),
 }));
 
 describe("Scan plate screen", () => {
@@ -114,18 +118,12 @@ describe("Scan plate screen", () => {
       canceled: false,
       assets: [{ uri: "file:///picked.jpg" }],
     });
-    (scanVehiclePlate as jest.Mock).mockResolvedValueOnce({
-      data: {
-        success: true,
-        message: "Scan OCR termine",
-        data: {
-          plate: "AB-12345",
-          confidence: 0.92,
-          candidates: ["AB-12345"],
-          raw_text: "AB12345",
-          is_reliable: true,
-          source: "ai",
-        },
+    (scanGeminiDirect as jest.Mock).mockResolvedValueOnce({
+      plateNumber: "AB-12345",
+      rawResponse: {
+        status: "success",
+        plate_number: "AB-12345",
+        model_used: "gemini-2.5-flash",
       },
     });
     (searchVehicleByPlate as jest.Mock).mockResolvedValueOnce({

@@ -1,5 +1,4 @@
-// src/api/documents.api.ts
-import api from "./api";
+﻿import api from "./api";
 
 export type DocumentType =
   | "DRIVER_LICENSE"
@@ -10,30 +9,43 @@ export type DocumentType =
 
 export type VehicleDossierSection = "all" | "vehicle" | "documents" | "tickets";
 
+function unwrapApiPayload<T>(payload: unknown): T {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "success" in (payload as Record<string, unknown>) &&
+    "data" in (payload as Record<string, unknown>)
+  ) {
+    return (payload as { data: T }).data;
+  }
+
+  return payload as T;
+}
+
 export async function searchDriverLicense(license_number: string) {
   const res = await api.get("documents/driver-license/search", {
     params: { license_number },
   });
-  return res.data; // objet du permis
+  return unwrapApiPayload<Record<string, unknown>>(res.data);
 }
 
 export async function searchVehicleCard(card_number: string) {
   const res = await api.get("documents/vehicle-cards/search/", {
     params: { card_number },
   });
-  return res.data; // objet carte véhicule
+  return unwrapApiPayload<Record<string, unknown>>(res.data);
 }
 
 export async function searchVehicleInsurance(policy_number: string) {
   const res = await api.get("documents/vehicle-insurances/search/", {
     params: { policy_number },
   });
-  return res.data; // objet assurance
+  return unwrapApiPayload<Record<string, unknown>>(res.data);
 }
 
 export async function getVehicleRegistrationByCode(registration_code: string) {
   const res = await api.get(`documents/registrations/${registration_code}/`);
-  return res.data; // objet immatriculation
+  return unwrapApiPayload<Record<string, unknown>>(res.data);
 }
 
 export async function getVehicleDossierByPlate(
@@ -43,7 +55,5 @@ export async function getVehicleDossierByPlate(
   const res = await api.get("vehicles/dossier/", {
     params: { plate_number, section },
   });
-
-  // Endpoint wrapped in success_response -> return only payload
-  return res?.data?.data ?? res.data;
+  return unwrapApiPayload<Record<string, unknown>>(res.data);
 }

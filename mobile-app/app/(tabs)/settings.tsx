@@ -15,7 +15,6 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import * as SecureStore from "expo-secure-store";
 import * as Application from "expo-application";
 import { BlurView } from "expo-blur";
 
@@ -23,8 +22,9 @@ import Screen from "../../components/screen";
 import { AppTheme, ThemeMode } from "../../constants/theme";
 import { useAppTheme } from "../../src/providers/theme.provider";
 import { getUserProfile, UserProfile } from "../../src/api/users.api";
-import { changePassword, logout } from "../../src/api/auth.api";
+import { changePassword } from "../../src/api/auth.api";
 import { API_BASE_URL, IS_FALLBACK_API_BASE_URL } from "../../src/config/api";
+import { logout as logoutSession } from "../../src/utils/auth";
 import {
   AppSettings,
   loadSettings,
@@ -372,37 +372,8 @@ export default function SettingsScreen() {
         style: "destructive",
         onPress: async () => {
           setLogoutLoading(true);
-
-          let serverLogoutOk = true;
-
           try {
-            const refresh = await SecureStore.getItemAsync("refresh_token");
-
-            // 1) Tentative logout serveur (blacklist)
-            if (refresh) {
-              try {
-                await logout(refresh);
-              } catch {
-                serverLogoutOk = false;
-              }
-            } else {
-              // pas de refresh => on ne peut pas blacklist côté serveur
-              serverLogoutOk = false;
-            }
-
-            // 2) Purge tokens local (toujours)
-            await SecureStore.deleteItemAsync("access_token");
-            await SecureStore.deleteItemAsync("refresh_token");
-
-            // 3) Feedback (optionnel)
-            if (!serverLogoutOk) {
-              Alert.alert(
-                "Déconnecté",
-                "Déconnexion locale effectuée. Le serveur n’a pas confirmé la déconnexion (réseau/route)."
-              );
-            }
-
-            // 4) Retour login
+            await logoutSession();
             router.replace("/login");
           } finally {
             setLogoutLoading(false);

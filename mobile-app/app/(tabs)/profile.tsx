@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInputProps,
   TextInput,
   View,
 } from "react-native";
@@ -330,8 +331,8 @@ function Field({
   onChange: (v: string) => void;
   editable: boolean;
   placeholder?: string;
-  keyboardType?: any;
-  autoCapitalize?: any;
+  keyboardType?: TextInputProps["keyboardType"];
+  autoCapitalize?: TextInputProps["autoCapitalize"];
   styles?: ReturnType<typeof createStyles>;
 }) {
   const resolvedStyles = styles ?? createStyles(themeSingleton);
