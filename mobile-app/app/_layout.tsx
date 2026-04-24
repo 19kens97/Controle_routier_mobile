@@ -1,8 +1,9 @@
 import React from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, AppState, Platform, View } from "react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import * as NavigationBar from "expo-navigation-bar";
 
 import { theme } from "../constants/theme";
 import { ThemeProvider, useAppTheme } from "../src/providers/theme.provider";
@@ -11,6 +12,30 @@ import { configureNotificationChannel } from "../src/utils/notifications";
 export default function RootLayout() {
   React.useEffect(() => {
     configureNotificationChannel().catch(() => undefined);
+  }, []);
+
+  React.useEffect(() => {
+    if (Platform.OS !== "android") {
+      return;
+    }
+
+    const applyImmersiveMode = () => {
+      NavigationBar.setPositionAsync("absolute").catch(() => undefined);
+      NavigationBar.setBehaviorAsync("overlay-swipe").catch(() => undefined);
+      NavigationBar.setVisibilityAsync("hidden").catch(() => undefined);
+      NavigationBar.setBackgroundColorAsync("#00000000").catch(() => undefined);
+    };
+
+    applyImmersiveMode();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        applyImmersiveMode();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, []);
 
   return (

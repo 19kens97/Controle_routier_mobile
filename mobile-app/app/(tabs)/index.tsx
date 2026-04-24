@@ -1,32 +1,27 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { router } from "expo-router";
-import * as ImagePicker from "expo-image-picker";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
-  Image,
-  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Screen from "../../components/screen";
 import { AppTheme } from "../../constants/theme";
 import {
   fetchHomeDashboard,
   HomeDashboardData,
-  GeminiConnectionTestData,
-  testGeminiConnection,
 } from "../../src/api/home.api";
-import { scanGeminiDirect } from "../../src/api/gemini.api";
 import { getUserProfile, UserProfile } from "../../src/api/users.api";
 import { useAppTheme } from "../../src/providers/theme.provider";
+import { getLatestScan, ScanHistoryItem } from "../../src/storage/scan-history.storage";
 import { createPageStyles } from "../../src/ui/page-styles";
-import { getApiErrorMessage } from "../../src/utils/apiErrors";
 
 type AlertItem = {
   id: string;
@@ -42,14 +37,10 @@ type ActivityItem = {
   status: "SUCCESS" | "WARNING" | "NEUTRAL";
 };
 
-type GeminiTestState = {
-  checkedAt: string;
-  data: GeminiConnectionTestData;
-  message: string;
-};
-
 export default function HomeDashboard() {
   const { theme } = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const pageStyles = useMemo(() => createPageStyles(theme), [theme]);
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -58,15 +49,7 @@ export default function HomeDashboard() {
   const [dashboard, setDashboard] = useState<HomeDashboardData | null>(null);
   const [loadingDashboard, setLoadingDashboard] = useState(true);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
-  const [testingGemini, setTestingGemini] = useState(false);
-  const [geminiError, setGeminiError] = useState<string | null>(null);
-  const [geminiResult, setGeminiResult] = useState<GeminiTestState | null>(null);
-  const [geminiScanLoading, setGeminiScanLoading] = useState(false);
-  const [geminiScanError, setGeminiScanError] = useState<string | null>(null);
-  const [geminiScanImageUri, setGeminiScanImageUri] = useState<string | null>(null);
-  const [geminiScanPlate, setGeminiScanPlate] = useState<string | null>(null);
-  const [geminiScanConfidence, setGeminiScanConfidence] = useState<number>(0);
-  const [geminiScanCandidates, setGeminiScanCandidates] = useState<string[]>([]);
+  const [latestScan, setLatestScan] = useState<ScanHistoryItem | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -113,6 +96,21 @@ export default function HomeDashboard() {
     };
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      const latest = await getLatestScan();
+      if (mounted) {
+        setLatestScan(latest);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const userName = useMemo(() => {
     if (!profile) return "Agent";
     const first = (profile.first_name || "").trim();
@@ -150,146 +148,6 @@ export default function HomeDashboard() {
 
   const activity: ActivityItem[] = useMemo(() => (dashboard?.activity || []).slice(0, 4), [dashboard]);
 
-  async function handleTestGeminiConnection() {
-    if (testingGemini) {
-      return;
-    }
-
-    setTestingGemini(true);
-    setGeminiError(null);
-
-    try {
-      const response = await testGeminiConnection();
-      setGeminiResult({
-        checkedAt: new Date().toISOString(),
-        data: response.data,
-        message: response.message,
-      });
-    } catch (error: any) {
-      setGeminiResult(null);
-      setGeminiError(
-        error?.response?.data?.message ||
-          error?.response?.data?.errors?.detail ||
-          error?.message ||
-          "Echec du test de connexion Gemini."
-      );
-    } finally {
-      setTestingGemini(false);
-    }
-  }
-
-  async function runGeminiScan(imageUri: string) {
-    setGeminiScanLoading(true);
-    setGeminiScanError(null);
-    setGeminiScanPlate(null);
-    setGeminiScanConfidence(0);
-    setGeminiScanCandidates([]);
-    setGeminiScanImageUri(imageUri);
-
-    try {
-      const result = await scanGeminiDirect(imageUri);
-      const raw = result.rawResponse || {};
-      const confidence = Number(
-        raw?.data?.confidence ?? raw?.confidence ?? 0
-      );
-      const candidates = Array.isArray(raw?.data?.candidates)
-        ? raw.data.candidates
-        : Array.isArray(raw?.candidates)
-          ? raw.candidates
-          : [];
-
-      setGeminiScanPlate(result.plateNumber);
-      setGeminiScanConfidence(Number.isFinite(confidence) ? confidence : 0);
-      setGeminiScanCandidates(candidates);
-
-      if (!result.plateNumber) {
-        setGeminiScanError(
-          raw?.message ||
-            raw?.error ||
-            raw?.detail ||
-            "Aucune plaque n'a ete retournee par l'API Gemini."
-        );
-      }
-    } catch (error: any) {
-      setGeminiScanError(
-        getApiErrorMessage(error, {
-          network: "Connexion impossible pendant le scan Gemini.",
-          timeout: "Le scan Gemini a pris trop de temps. Reessaie avec une image plus legere.",
-          fallback: "Echec du scan Gemini.",
-        })
-      );
-    } finally {
-      setGeminiScanLoading(false);
-    }
-  }
-
-  async function handleGeminiCameraScan() {
-    if (geminiScanLoading) {
-      return;
-    }
-    try {
-      const currentPermission = await ImagePicker.getCameraPermissionsAsync();
-      let permissionGranted = currentPermission.granted;
-      let canAskAgain = currentPermission.canAskAgain;
-
-      if (!permissionGranted && canAskAgain) {
-        const requestedPermission = await ImagePicker.requestCameraPermissionsAsync();
-        permissionGranted = requestedPermission.granted;
-        canAskAgain = requestedPermission.canAskAgain;
-      }
-
-      if (!permissionGranted) {
-        setGeminiScanError("L'acces a la camera est requis pour scanner avec Gemini.");
-        Alert.alert(
-          "Acces camera requis",
-          "Active l'acces camera dans les parametres de l'appareil.",
-          [
-            { text: "Annuler", style: "cancel" },
-            { text: "Ouvrir parametres", onPress: () => Linking.openSettings() },
-          ]
-        );
-        return;
-      }
-
-      const captured = await ImagePicker.launchCameraAsync({
-        mediaTypes: ["images"],
-        quality: 1,
-        allowsEditing: false,
-      });
-
-      if (!captured.canceled && captured.assets.length > 0) {
-        await runGeminiScan(captured.assets[0].uri);
-      }
-    } catch (error: any) {
-      setGeminiScanError(error?.message || "Impossible d'ouvrir la camera.");
-    }
-  }
-
-  async function handleGeminiLibraryScan() {
-    if (geminiScanLoading) {
-      return;
-    }
-    try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        setGeminiScanError("Permission galerie refusee.");
-        return;
-      }
-
-      const selected = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        quality: 1,
-        allowsEditing: false,
-      });
-
-      if (!selected.canceled && selected.assets.length > 0) {
-        await runGeminiScan(selected.assets[0].uri);
-      }
-    } catch (error: any) {
-      setGeminiScanError(error?.message || "Impossible d'ouvrir la galerie.");
-    }
-  }
-
   return (
     <Screen>
       <ScrollView
@@ -297,7 +155,7 @@ export default function HomeDashboard() {
         contentContainerStyle={{
           paddingHorizontal: theme.spacing.md,
           paddingTop: theme.spacing.lg,
-          paddingBottom: theme.spacing.lg,
+          paddingBottom: theme.spacing.lg + insets.bottom + tabBarHeight,
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -338,114 +196,58 @@ export default function HomeDashboard() {
 
         <View style={pageStyles.card}>
           <View style={pageStyles.cardHeader}>
-            <Text style={pageStyles.cardTitle}>Connexion Gemini</Text>
-            <Pressable
-              onPress={handleTestGeminiConnection}
-              style={({ pressed }) => [styles.geminiTestButton, pressed && { opacity: 0.9 }]}
-              disabled={testingGemini}
-            >
-              {testingGemini ? (
-                <ActivityIndicator size="small" color={theme.colors.accent} />
-              ) : (
-                <Ionicons name="wifi-outline" size={16} color={theme.colors.accent} />
-              )}
-              <Text style={styles.geminiTestButtonText}>
-                {testingGemini ? "Test en cours..." : "Tester"}
-              </Text>
-            </Pressable>
+            <Text style={pageStyles.cardTitle}>Dernier scan</Text>
           </View>
 
-          <Text style={styles.geminiHint}>
-            Verifie la cle API et un appel Gemini reel avec le modele configure.
-          </Text>
-
-          {geminiResult ? (
-            <View style={styles.geminiStatusRow}>
-              <Ionicons
-                name={geminiResult.data.ok ? "checkmark-circle-outline" : "close-circle-outline"}
-                size={18}
-                color={geminiResult.data.ok ? theme.colors.success : theme.colors.danger}
-              />
-              <View style={{ flex: 1 }}>
+          {latestScan ? (
+            <View style={styles.lastScanWrap}>
+              <View style={styles.lastScanRow}>
+                <Ionicons
+                  name={
+                    latestScan.status === "SUCCESS"
+                      ? "checkmark-circle-outline"
+                      : latestScan.status === "NO_PLATE"
+                        ? "help-circle-outline"
+                        : "close-circle-outline"
+                  }
+                  size={18}
+                  color={
+                    latestScan.status === "SUCCESS"
+                      ? theme.colors.success
+                      : latestScan.status === "NO_PLATE"
+                        ? theme.colors.accent
+                        : theme.colors.danger
+                  }
+                />
                 <Text style={styles.geminiStatusTitle}>
-                  {geminiResult.data.ok ? "Connexion validee" : "Connexion indisponible"}
+                  {latestScan.plateNumber ? latestScan.plateNumber : "Aucune plaque detectee"}
                 </Text>
-                <Text style={styles.geminiStatusText}>
-                  {geminiResult.data.error || geminiResult.message}
-                </Text>
-                <Text style={styles.geminiMetaText}>Modele: {geminiResult.data.model}</Text>
               </View>
-            </View>
-          ) : null}
 
-          {geminiError ? (
-            <View style={styles.geminiStatusRow}>
-              <Ionicons name="alert-circle-outline" size={18} color={theme.colors.danger} />
-              <Text style={styles.errorText}>{geminiError}</Text>
-            </View>
-          ) : null}
-        </View>
-
-        <View style={pageStyles.card}>
-          <View style={pageStyles.cardHeader}>
-            <Text style={pageStyles.cardTitle}>Scan Gemini rapide</Text>
-          </View>
-
-          <Text style={styles.geminiHint}>
-            Prends une photo (ou choisis une image): l'app envoie le fichier brut a l'API Gemini dediee.
-          </Text>
-
-          <View style={styles.geminiScanActions}>
-            <Pressable
-              onPress={handleGeminiCameraScan}
-              style={({ pressed }) => [styles.geminiScanActionButton, pressed && { opacity: 0.9 }]}
-              disabled={geminiScanLoading}
-            >
-              <Ionicons name="camera-outline" size={16} color={theme.colors.accent} />
-              <Text style={styles.geminiScanActionText}>Prendre photo</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={handleGeminiLibraryScan}
-              style={({ pressed }) => [styles.geminiScanActionButton, pressed && { opacity: 0.9 }]}
-              disabled={geminiScanLoading}
-            >
-              <Ionicons name="images-outline" size={16} color={theme.colors.accent} />
-              <Text style={styles.geminiScanActionText}>Choisir photo</Text>
-            </Pressable>
-          </View>
-
-          {geminiScanImageUri ? (
-            <View style={styles.geminiScanPreviewWrap}>
-              <Image source={{ uri: geminiScanImageUri }} style={styles.geminiScanPreview} />
-            </View>
-          ) : null}
-
-          {geminiScanLoading ? (
-            <View style={styles.geminiStatusRow}>
-              <ActivityIndicator size="small" color={theme.colors.accent} />
-              <Text style={styles.infoText}>Analyse Gemini en cours...</Text>
-            </View>
-          ) : null}
-
-          {geminiScanPlate ? (
-            <View style={styles.geminiScanResultBox}>
-              <Text style={styles.geminiStatusTitle}>Plaque detectee: {geminiScanPlate}</Text>
-              <Text style={styles.geminiStatusText}>
-                Confiance: {Math.round(geminiScanConfidence * 100)}%
+              <Text style={styles.lastScanMeta}>
+                Date: {new Date(latestScan.scannedAt).toLocaleString("fr-FR")}
               </Text>
-              <Text style={styles.geminiStatusText}>
-                Candidats: {geminiScanCandidates.length ? geminiScanCandidates.join(", ") : "-"}
+              <Text style={styles.lastScanMeta}>
+                Source: {latestScan.source === "CAMERA" ? "Camera" : "Galerie"}
+              </Text>
+              <Text style={styles.lastScanMeta}>
+                Statut:{" "}
+                {latestScan.status === "SUCCESS"
+                  ? "Succes"
+                  : latestScan.status === "NO_PLATE"
+                    ? "Aucune plaque"
+                    : "Erreur"}
+              </Text>
+              <Text style={styles.lastScanMeta}>
+                Confiance:{" "}
+                {typeof latestScan.confidence === "number"
+                  ? `${Math.round(latestScan.confidence * 100)}%`
+                  : "-"}
               </Text>
             </View>
-          ) : null}
-
-          {geminiScanError ? (
-            <View style={styles.geminiStatusRow}>
-              <Ionicons name="alert-circle-outline" size={18} color={theme.colors.danger} />
-              <Text style={styles.errorText}>{geminiScanError}</Text>
-            </View>
-          ) : null}
+          ) : (
+            <Text style={styles.emptyText}>Aucun scan enregistre pour le moment.</Text>
+          )}
         </View>
 
         <View style={pageStyles.card}>
@@ -701,80 +503,13 @@ function createStyles(theme: AppTheme) {
       fontWeight: "900",
     },
     link: { color: "rgba(255,215,0,0.85)", fontWeight: "900" },
-    geminiTestButton: {
-      flexDirection: "row",
-      gap: 6,
-      alignItems: "center",
-      paddingHorizontal: 10,
-      paddingVertical: 8,
-      borderRadius: theme.radius.pill,
-      backgroundColor: theme.colors.surface2,
-      borderWidth: 1,
-      borderColor: theme.colors.accentBorder,
-    },
-    geminiTestButtonText: {
-      color: theme.colors.accent,
-      fontSize: theme.font.small,
-      fontWeight: "900",
-    },
-    geminiHint: {
-      color: theme.colors.textDim,
-      fontSize: theme.font.small,
-      marginTop: theme.spacing.xs,
-    },
-    geminiStatusRow: {
-      flexDirection: "row",
-      gap: 10,
-      alignItems: "flex-start",
-      marginTop: theme.spacing.md,
-    },
     geminiStatusTitle: {
       color: theme.colors.text,
       fontSize: theme.font.body,
       fontWeight: "800",
     },
-    geminiStatusText: {
-      color: theme.colors.textDim,
-      fontSize: theme.font.small,
-      marginTop: 2,
-    },
-    geminiScanActions: {
-      flexDirection: "row",
-      gap: 8,
-      marginTop: theme.spacing.md,
-    },
-    geminiScanActionButton: {
-      flex: 1,
-      flexDirection: "row",
-      gap: 6,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingHorizontal: 10,
-      paddingVertical: 10,
-      borderRadius: theme.radius.md,
-      backgroundColor: theme.colors.surface2,
-      borderWidth: 1,
-      borderColor: theme.colors.accentBorder,
-    },
-    geminiScanActionText: {
-      color: theme.colors.accent,
-      fontSize: theme.font.small,
-      fontWeight: "900",
-    },
-    geminiScanPreviewWrap: {
-      marginTop: theme.spacing.md,
-      borderRadius: theme.radius.md,
-      overflow: "hidden",
-      borderWidth: 1,
-      borderColor: theme.colors.border2,
-      backgroundColor: theme.colors.surface2,
-    },
-    geminiScanPreview: {
-      width: "100%",
-      height: 170,
-    },
-    geminiScanResultBox: {
-      marginTop: theme.spacing.md,
+    lastScanWrap: {
+      marginTop: theme.spacing.xs,
       borderRadius: theme.radius.md,
       padding: theme.spacing.sm,
       borderWidth: 1,
@@ -782,11 +517,15 @@ function createStyles(theme: AppTheme) {
       backgroundColor: theme.colors.surface2,
       gap: 4,
     },
-    geminiMetaText: {
-      color: theme.colors.textMuted,
+    lastScanRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 2,
+    },
+    lastScanMeta: {
+      color: theme.colors.textDim,
       fontSize: theme.font.small,
-      marginTop: 4,
-      fontWeight: "700",
     },
     alertRow: { flexDirection: "row", gap: 10, paddingTop: theme.spacing.md },
     alertRowTitle: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: "800" },
