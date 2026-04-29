@@ -35,8 +35,8 @@ type TicketPrefillResponse = {
 
 type TicketCreateRequest = {
   plate_number: string;
-  motif: string;
-  amount: string;
+  infraction_id: number;
+  license_number?: string;
   latitude?: number;
   longitude?: number;
   location_label?: string;
@@ -55,6 +55,16 @@ type TicketCreateResponse = {
     status: string;
     paid_at: string | null;
     payment_reference: string | null;
+    chauffeur_nom: string;
+    no_permis: string | null;
+    no_plaque: string;
+    lieu_contravention: string;
+    no_violation: string;
+    date: string;
+    heure: string;
+    no_agent: number;
+    article: string | null;
+    no_matricule: string | null;
     agent: {
       id: number;
       username: string;
@@ -73,6 +83,7 @@ type TicketCreateResponse = {
     infraction: {
       id: number;
       code: string;
+      article: string | null;
       description: string;
       penalty: string;
       category: string;
@@ -82,8 +93,8 @@ type TicketCreateResponse = {
 
 type TicketCreateManualRequest = {
   plate_number: string;
-  motif: string;
-  amount: string;
+  infraction_id: number;
+  license_number?: string;
   latitude?: number;
   longitude?: number;
   location_label?: string;

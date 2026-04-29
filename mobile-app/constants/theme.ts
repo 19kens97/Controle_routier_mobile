@@ -255,3 +255,4 @@ export function applyThemeMode(mode: ThemeMode): ResolvedTheme {
   applyResolvedTheme(resolved);
   return resolved;
 }
+ 

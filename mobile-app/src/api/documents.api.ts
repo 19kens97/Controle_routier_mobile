@@ -9,6 +9,28 @@ export type DocumentType =
 
 export type VehicleDossierSection = "all" | "vehicle" | "documents" | "tickets";
 
+export type DriverLicenseSearchTicketSummary = {
+  total: number;
+  en_cours: number;
+  regle: number;
+};
+
+export type DriverLicenseSearchResponse = {
+  dossier: string;
+  nif: string | null;
+  nom: string;
+  adresse: string | null;
+  date_de_naissance: string | null;
+  lieu_emission: string | null;
+  sexe: string | null;
+  groupe_sanguin: string | null;
+  type: string | null;
+  emis_le: string | null;
+  expire_le: string | null;
+  tickets_summary?: DriverLicenseSearchTicketSummary;
+  tickets?: Array<Record<string, unknown>>;
+};
+
 function unwrapApiPayload<T>(payload: unknown): T {
   if (
     payload &&
@@ -26,7 +48,7 @@ export async function searchDriverLicense(license_number: string) {
   const res = await api.get("documents/driver-license/search", {
     params: { license_number },
   });
-  return unwrapApiPayload<Record<string, unknown>>(res.data);
+  return unwrapApiPayload<DriverLicenseSearchResponse>(res.data);
 }
 
 export async function searchVehicleCard(card_number: string) {

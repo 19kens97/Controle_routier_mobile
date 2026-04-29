@@ -15,6 +15,7 @@ import { useAppTheme } from "../../src/providers/theme.provider";
 import { getApiErrorMessage } from "../../src/utils/apiErrors";
 import {
   DocumentType,
+  DriverLicenseSearchResponse,
   getVehicleDossierByPlate,
   getVehicleRegistrationByCode,
   searchDriverLicense,
@@ -89,6 +90,16 @@ function normalizePlateNumberInput(value: string): string {
   return raw;
 }
 
+function isExpiredDate(value: string | undefined): boolean {
+  if (!value) return false;
+  const expiry = new Date(value);
+  if (Number.isNaN(expiry.getTime())) return false;
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return expiry < today;
+}
+
 export default function DocumentsScreen() {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -100,6 +111,7 @@ export default function DocumentsScreen() {
   const [result, setResult] = useState<any | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [dossierSection, setDossierSection] = useState<VehicleDossierSection>("all");
+  const [openTicketIndex, setOpenTicketIndex] = useState<number | null>(null);
 
   const meta = useMemo(() => DOCS.find((d) => d.type === docType)!, [docType]);
 
@@ -139,6 +151,7 @@ export default function DocumentsScreen() {
       }
 
       setResult(data);
+      setOpenTicketIndex(null);
       setHistory((prev) => [{ type: docType, query: effectiveQuery, at: Date.now() }, ...prev].slice(0, 8));
     } catch (e: any) {
       setErrorMsg(
@@ -165,6 +178,7 @@ export default function DocumentsScreen() {
     try {
       const data = await getVehicleDossierByPlate(normalizedPlate, section);
       setResult(data);
+      setOpenTicketIndex(null);
       setDossierSection(section);
       setQuery(normalizedPlate);
     } catch (e: any) {
@@ -181,6 +195,14 @@ export default function DocumentsScreen() {
 
   const canSearch = query.trim().length > 0 && !loading;
   const isDossierMode = docType === "VEHICLE_DOSSIER";
+  const isDriverLicenseMode = docType === "DRIVER_LICENSE";
+  const driverResult = isDriverLicenseMode ? (result as DriverLicenseSearchResponse | null) : null;
+  const isLicenseExpired = isExpiredDate(driverResult?.expire_le || undefined);
+  const linkedTickets = Array.isArray(driverResult?.tickets) ? driverResult.tickets : [];
+  const linkedTicketsTotal = driverResult?.tickets_summary?.total ?? linkedTickets.length;
+  const openTickets = linkedTickets.filter(
+    (ticket) => String((ticket as Record<string, unknown>)?.status || "").toUpperCase() === "EN_COURS"
+  );
 
   return (
     <Screen edges={["top", "left", "right"]}>
@@ -311,7 +333,111 @@ export default function DocumentsScreen() {
           </View>
         ) : null}
 
-        {result ? (
+        {driverResult ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Resultat permis</Text>
+
+            {isLicenseExpired ? (
+              <View style={styles.alertCritical}>
+                <Text style={styles.alertCriticalText}>[!] Permis expire: action requise.</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.kvRow}>
+              <Text style={styles.k}>Nom</Text>
+              <Text style={styles.v}>{normalizeValue(driverResult.nom || "-")}</Text>
+            </View>
+            <View style={styles.kvRow}>
+              <Text style={styles.k}>Dossier</Text>
+              <Text style={styles.v}>{normalizeValue(driverResult.dossier)}</Text>
+            </View>
+            <View style={styles.kvRow}>
+              <Text style={styles.k}>NIF</Text>
+              <Text style={styles.v}>{normalizeValue(driverResult.nif)}</Text>
+            </View>
+            <View style={styles.kvRow}>
+              <Text style={styles.k}>Adresse</Text>
+              <Text style={styles.v}>{normalizeValue(driverResult.adresse)}</Text>
+            </View>
+            <View style={styles.kvRow}>
+              <Text style={styles.k}>Date de naissance</Text>
+              <Text style={styles.v}>{normalizeValue(driverResult.date_de_naissance)}</Text>
+            </View>
+            <View style={styles.kvRow}>
+              <Text style={styles.k}>Type</Text>
+              <Text style={styles.v}>{normalizeValue(driverResult.type)}</Text>
+            </View>
+            <View style={styles.kvRow}>
+              <Text style={styles.k}>Emis le</Text>
+              <Text style={styles.v}>{normalizeValue(driverResult.emis_le)}</Text>
+            </View>
+            <View style={styles.kvRow}>
+              <Text style={styles.k}>Expire le</Text>
+              <Text style={styles.v}>{normalizeValue(driverResult.expire_le)}</Text>
+            </View>
+            <View style={styles.kvRow}>
+              <Text style={styles.k}>Lieu d'emission</Text>
+              <Text style={styles.v}>{normalizeValue(driverResult.lieu_emission)}</Text>
+            </View>
+            <View style={styles.kvRow}>
+              <Text style={styles.k}>Groupe sanguin</Text>
+              <Text style={styles.v}>{normalizeValue(driverResult.groupe_sanguin)}</Text>
+            </View>
+            <View style={styles.kvRow}>
+              <Text style={styles.k}>Sexe</Text>
+              <Text style={styles.v}>{normalizeValue(driverResult.sexe)}</Text>
+            </View>
+          </View>
+        ) : null}
+
+        {driverResult ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Tickets lies</Text>
+            <View style={styles.kvRow}>
+              <Text style={styles.k}>total</Text>
+              <Text style={styles.v}>{linkedTicketsTotal}</Text>
+            </View>
+
+            {openTickets.length > 0 ? (
+              <>
+                <Pressable
+                  onPress={() => setOpenTicketIndex((prev) => (prev === -1 ? null : -1))}
+                  style={({ pressed }) => [styles.alertBtn, pressed && { opacity: 0.9 }]}
+                >
+                  <Text style={styles.alertBtnText}>
+                    [!] {openTickets.length} verbalisation(s) en cours - cliquer pour afficher
+                  </Text>
+                </Pressable>
+
+                {openTicketIndex === -1 ? (
+                  <View style={styles.ticketListWrap}>
+                    {openTickets.map((ticket, index) => {
+                      const record = ticket as Record<string, unknown>;
+                      return (
+                        <View key={`open-ticket-${index}`} style={styles.ticketItem}>
+                          <Text style={styles.v}>Numero: {normalizeValue(record.ticket_number)}</Text>
+                          <Text style={styles.v}>Statut: {normalizeValue(record.status)}</Text>
+                          <Text style={styles.v}>Date: {normalizeValue(record.timestamp)}</Text>
+                          <Text style={styles.v}>Lieu: {normalizeValue(record.location)}</Text>
+                          <Text style={styles.v}>
+                            Infraction:{" "}
+                            {normalizeValue(
+                              (record.infraction as Record<string, unknown> | undefined)?.description
+                            )}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </>
+            ) : (
+              <Text style={styles.infoText}>Aucune verbalisation en cours.</Text>
+            )}
+          </View>
+        ) : null}
+
+        {result && !driverResult ? (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Resultat</Text>
             {Object.entries(result).map(([k, v]) => (
@@ -420,6 +546,7 @@ function createStyles(theme: AppTheme) {
     },
 
     error: { color: theme.colors.danger, fontWeight: "800", fontSize: theme.font.small },
+    infoText: { color: theme.colors.textMuted, fontWeight: "700", fontSize: theme.font.small },
 
     kvRow: {
       borderTopWidth: 1,
@@ -429,6 +556,33 @@ function createStyles(theme: AppTheme) {
     },
     k: { color: theme.colors.textMuted, fontSize: theme.font.small, fontWeight: "800" },
     v: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: "700" },
+    alertBtn: {
+      borderRadius: theme.radius.md,
+      paddingVertical: 10,
+      paddingHorizontal: 10,
+      backgroundColor: theme.colors.accentSoft,
+      borderWidth: 1,
+      borderColor: theme.colors.accentBorder,
+    },
+    alertBtnText: { color: theme.colors.text, fontWeight: "900", fontSize: theme.font.small },
+    alertCritical: {
+      borderRadius: theme.radius.md,
+      paddingVertical: 10,
+      paddingHorizontal: 10,
+      backgroundColor: "rgba(220,38,38,0.16)",
+      borderWidth: 1,
+      borderColor: "rgba(220,38,38,0.55)",
+    },
+    alertCriticalText: { color: theme.colors.danger, fontWeight: "900", fontSize: theme.font.small },
+    ticketListWrap: { gap: 8 },
+    ticketItem: {
+      borderWidth: 1,
+      borderColor: theme.colors.border2,
+      borderRadius: theme.radius.md,
+      padding: 10,
+      gap: 4,
+      backgroundColor: theme.colors.surface2,
+    },
 
     historyRow: {
       flexDirection: "row",

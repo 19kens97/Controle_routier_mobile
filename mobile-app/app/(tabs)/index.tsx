@@ -20,7 +20,6 @@ import {
 } from "../../src/api/home.api";
 import { getUserProfile, UserProfile } from "../../src/api/users.api";
 import { useAppTheme } from "../../src/providers/theme.provider";
-import { getLatestScan, ScanHistoryItem } from "../../src/storage/scan-history.storage";
 import { createPageStyles } from "../../src/ui/page-styles";
 
 type AlertItem = {
@@ -49,7 +48,6 @@ export default function HomeDashboard() {
   const [dashboard, setDashboard] = useState<HomeDashboardData | null>(null);
   const [loadingDashboard, setLoadingDashboard] = useState(true);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
-  const [latestScan, setLatestScan] = useState<ScanHistoryItem | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -88,21 +86,6 @@ export default function HomeDashboard() {
           setLoadingProfile(false);
           setLoadingDashboard(false);
         }
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let mounted = true;
-
-    (async () => {
-      const latest = await getLatestScan();
-      if (mounted) {
-        setLatestScan(latest);
       }
     })();
 
@@ -193,62 +176,6 @@ export default function HomeDashboard() {
             <Text style={styles.errorText}>{dashboardError}</Text>
           </View>
         ) : null}
-
-        <View style={pageStyles.card}>
-          <View style={pageStyles.cardHeader}>
-            <Text style={pageStyles.cardTitle}>Dernier scan</Text>
-          </View>
-
-          {latestScan ? (
-            <View style={styles.lastScanWrap}>
-              <View style={styles.lastScanRow}>
-                <Ionicons
-                  name={
-                    latestScan.status === "SUCCESS"
-                      ? "checkmark-circle-outline"
-                      : latestScan.status === "NO_PLATE"
-                        ? "help-circle-outline"
-                        : "close-circle-outline"
-                  }
-                  size={18}
-                  color={
-                    latestScan.status === "SUCCESS"
-                      ? theme.colors.success
-                      : latestScan.status === "NO_PLATE"
-                        ? theme.colors.accent
-                        : theme.colors.danger
-                  }
-                />
-                <Text style={styles.geminiStatusTitle}>
-                  {latestScan.plateNumber ? latestScan.plateNumber : "Aucune plaque detectee"}
-                </Text>
-              </View>
-
-              <Text style={styles.lastScanMeta}>
-                Date: {new Date(latestScan.scannedAt).toLocaleString("fr-FR")}
-              </Text>
-              <Text style={styles.lastScanMeta}>
-                Source: {latestScan.source === "CAMERA" ? "Camera" : "Galerie"}
-              </Text>
-              <Text style={styles.lastScanMeta}>
-                Statut:{" "}
-                {latestScan.status === "SUCCESS"
-                  ? "Succes"
-                  : latestScan.status === "NO_PLATE"
-                    ? "Aucune plaque"
-                    : "Erreur"}
-              </Text>
-              <Text style={styles.lastScanMeta}>
-                Confiance:{" "}
-                {typeof latestScan.confidence === "number"
-                  ? `${Math.round(latestScan.confidence * 100)}%`
-                  : "-"}
-              </Text>
-            </View>
-          ) : (
-            <Text style={styles.emptyText}>Aucun scan enregistre pour le moment.</Text>
-          )}
-        </View>
 
         <View style={pageStyles.card}>
           <View style={pageStyles.cardHeader}>
@@ -503,30 +430,6 @@ function createStyles(theme: AppTheme) {
       fontWeight: "900",
     },
     link: { color: "rgba(255,215,0,0.85)", fontWeight: "900" },
-    geminiStatusTitle: {
-      color: theme.colors.text,
-      fontSize: theme.font.body,
-      fontWeight: "800",
-    },
-    lastScanWrap: {
-      marginTop: theme.spacing.xs,
-      borderRadius: theme.radius.md,
-      padding: theme.spacing.sm,
-      borderWidth: 1,
-      borderColor: theme.colors.border2,
-      backgroundColor: theme.colors.surface2,
-      gap: 4,
-    },
-    lastScanRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      marginBottom: 2,
-    },
-    lastScanMeta: {
-      color: theme.colors.textDim,
-      fontSize: theme.font.small,
-    },
     alertRow: { flexDirection: "row", gap: 10, paddingTop: theme.spacing.md },
     alertRowTitle: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: "800" },
     alertRowDesc: {
