@@ -30,6 +30,25 @@ export type HomeDashboardData = {
   activity: HomeActivityItem[];
 };
 
+export type HomeAlertHistoryItem = HomeAlertItem & {
+  ticketId: number;
+  plateNumber: string;
+  createdAt: string;
+};
+
+export type HomeRecentScanItem = {
+  id: string;
+  plateNumber: string;
+  modelUsed: string;
+  scannedAt: string;
+  vehicle: {
+    id: number;
+    brand: string;
+    model: string;
+    color: string;
+  } | null;
+};
+
 export type GeminiConnectionTestData = {
   ok: boolean;
   configured: boolean;
@@ -44,6 +63,26 @@ type HomeDashboardApiResponse = {
   data: HomeDashboardData;
 };
 
+type HomeAlertsApiResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    periodDays: number;
+    count: number;
+    items: HomeAlertHistoryItem[];
+  };
+};
+
+type HomeRecentScansApiResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    periodDays: number;
+    count: number;
+    items: HomeRecentScanItem[];
+  };
+};
+
 type GeminiConnectionTestApiResponse = {
   success: boolean;
   message: string;
@@ -52,6 +91,18 @@ type GeminiConnectionTestApiResponse = {
 
 export async function fetchHomeDashboard() {
   const response = await api.get<HomeDashboardApiResponse>("stats/home-dashboard/");
+  return response.data.data;
+}
+
+export async function fetchHomeAlerts(days = 30) {
+  const response = await api.get<HomeAlertsApiResponse>(`stats/home-alerts/?days=${days}`);
+  return response.data.data;
+}
+
+export async function fetchHomeRecentScans(days = 30, limit = 20) {
+  const response = await api.get<HomeRecentScansApiResponse>(
+    `stats/home-recent-scans/?days=${days}&limit=${limit}`
+  );
   return response.data.data;
 }
 

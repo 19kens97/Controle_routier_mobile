@@ -137,7 +137,8 @@ const DARK_COLORS: ThemeColors = {
   text: "#FFFFFF",
   textMuted: "rgba(255,255,255,0.65)",
   textDim: "rgba(255,255,255,0.60)",
-  accent: "rgba(255,215,0,0.95)",
+  // accent: "rgba(255,215,0,0.95)",
+  accent: "rgba(48, 133, 107, 0.93)",
   accentSoft: "rgba(255,215,0,0.12)",
   accentBorder: "rgba(255,215,0,0.22)",
   danger: "rgba(161, 90, 90, 0.95)",
@@ -255,4 +256,3 @@ export function applyThemeMode(mode: ThemeMode): ResolvedTheme {
   applyResolvedTheme(resolved);
   return resolved;
 }
- 

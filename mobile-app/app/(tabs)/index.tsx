@@ -180,7 +180,7 @@ export default function HomeDashboard() {
         <View style={pageStyles.card}>
           <View style={pageStyles.cardHeader}>
             <Text style={pageStyles.cardTitle}>Alertes prioritaires</Text>
-            <Pressable onPress={() => router.push("/modal")}>
+            <Pressable onPress={() => router.push("/home-alerts" as any)}>
               <Text style={styles.link}>Tout voir</Text>
             </Pressable>
           </View>
@@ -224,8 +224,8 @@ export default function HomeDashboard() {
           <QuickAction
             icon="time-outline"
             title="Derniers scans"
-            subtitle="Historique a finaliser"
-            onPress={() => router.push("/modal")}
+            subtitle="Scans de l'agent"
+            onPress={() => router.push("/recent-scans" as any)}
             theme={theme}
             styles={styles}
           />
