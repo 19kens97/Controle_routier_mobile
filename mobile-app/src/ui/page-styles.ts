@@ -2,12 +2,21 @@ import { StyleSheet } from "react-native";
 
 import { AppTheme } from "../../constants/theme";
 
+export function getPageInsets(theme: AppTheme) {
+  return {
+    horizontal: theme.spacing.md,
+    vertical: theme.spacing.lg,
+  };
+}
+
 export function createPageStyles(theme: AppTheme) {
+  const insets = getPageInsets(theme);
+
   return StyleSheet.create({
     content: {
-      paddingHorizontal: theme.spacing.md,
-      paddingTop: theme.spacing.lg,
-      paddingBottom: theme.spacing.lg,
+      paddingHorizontal: insets.horizontal,
+      paddingTop: insets.vertical,
+      paddingBottom: insets.vertical,
       gap: 12,
     },
     title: {

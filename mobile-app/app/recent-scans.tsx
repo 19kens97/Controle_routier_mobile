@@ -36,7 +36,7 @@ export default function RecentScansScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={pageStyles.content}>
         <Text style={pageStyles.title}>Derniers scans</Text>
         <Text style={pageStyles.subtitle}>Historique des 30 derniers jours</Text>
 
@@ -67,7 +67,6 @@ export default function RecentScansScreen() {
 
 function createStyles(theme: AppTheme) {
   return StyleSheet.create({
-    content: { padding: theme.spacing.md, gap: 10 },
     meta: { color: theme.colors.textMuted, fontWeight: "700", marginTop: 6 },
     desc: { color: theme.colors.textDim, marginTop: 4 },
     emptyText: { color: theme.colors.textMuted, fontWeight: "700" },

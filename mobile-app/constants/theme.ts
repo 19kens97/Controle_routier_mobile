@@ -61,6 +61,19 @@ type ThemeColors = {
   accent: string;
   accentSoft: string;
   accentBorder: string;
+  link: string;
+
+
+
+
+
+
+
+
+
+
+
+
   danger: string;
   success: string;
 };
@@ -137,8 +150,17 @@ const DARK_COLORS: ThemeColors = {
   text: "#FFFFFF",
   textMuted: "rgba(255,255,255,0.65)",
   textDim: "rgba(255,255,255,0.60)",
-  // accent: "rgba(255,215,0,0.95)",
-  accent: "rgba(48, 133, 107, 0.93)",
+  accent: "rgba(255,215,0,0.95)",
+  // accent: "rgba(48, 133, 107, 0.93)",
+  link: "rgba(255,215,0,0.85)",
+
+
+
+
+
+
+
+
   accentSoft: "rgba(255,215,0,0.12)",
   accentBorder: "rgba(255,215,0,0.22)",
   danger: "rgba(161, 90, 90, 0.95)",
@@ -146,7 +168,7 @@ const DARK_COLORS: ThemeColors = {
 };
 
 const LIGHT_COLORS: ThemeColors = {
-  bg0: LIGHT_BG_0,
+  bg0: LIGHT_BG_0, 
   bg1: LIGHT_BG_1,
   bg2: LIGHT_BG_2,
   surface: LIGHT_SURFACE,
@@ -157,6 +179,15 @@ const LIGHT_COLORS: ThemeColors = {
   textMuted: LIGHT_TEXT_MUTED,
   textDim: LIGHT_TEXT_DIM,
   accent: LIGHT_ACCENT,
+  link: "#E85D04",
+
+
+
+
+
+
+
+
   accentSoft: LIGHT_ACCENT_SOFT,
   accentBorder: LIGHT_ACCENT_BORDER,
   danger: LIGHT_DANGER,
@@ -175,6 +206,16 @@ const SYSTEM_COLORS: ThemeColors = {
   textMuted: SYSTEM_TEXT_MUTED,
   textDim: SYSTEM_TEXT_DIM,
   accent: SYSTEM_ACCENT,
+  link: "#4765ca",
+
+
+
+
+
+
+
+
+
   accentSoft: SYSTEM_ACCENT_SOFT,
   accentBorder: SYSTEM_ACCENT_BORDER,
   danger: SYSTEM_DANGER,

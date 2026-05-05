@@ -20,7 +20,7 @@ import {
 } from "../../src/api/home.api";
 import { getUserProfile, UserProfile } from "../../src/api/users.api";
 import { useAppTheme } from "../../src/providers/theme.provider";
-import { createPageStyles } from "../../src/ui/page-styles";
+import { createPageStyles, getPageInsets } from "../../src/ui/page-styles";
 
 type AlertItem = {
   id: string;
@@ -41,6 +41,7 @@ export default function HomeDashboard() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const pageStyles = useMemo(() => createPageStyles(theme), [theme]);
+  const pageInsets = useMemo(() => getPageInsets(theme), [theme]);
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -136,9 +137,9 @@ export default function HomeDashboard() {
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
-          paddingHorizontal: theme.spacing.md,
-          paddingTop: theme.spacing.lg,
-          paddingBottom: theme.spacing.lg + insets.bottom + tabBarHeight,
+          paddingHorizontal: pageInsets.horizontal,
+          paddingTop: pageInsets.vertical,
+          paddingBottom: pageInsets.vertical + insets.bottom + tabBarHeight,
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -429,8 +430,8 @@ function createStyles(theme: AppTheme) {
       fontSize: theme.font.body,
       fontWeight: "900",
     },
-    link: { color: "rgba(255,215,0,0.85)", fontWeight: "900" },
-    alertRow: { flexDirection: "row", gap: 10, paddingTop: theme.spacing.md },
+    
+    link: { color: theme.colors.link, fontWeight: "900" },alertRow: { flexDirection: "row", gap: 10, paddingTop: theme.spacing.md },
     alertRowTitle: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: "800" },
     alertRowDesc: {
       color: theme.colors.textDim,
