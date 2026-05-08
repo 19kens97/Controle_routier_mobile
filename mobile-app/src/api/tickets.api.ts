@@ -2,15 +2,14 @@ import api from "./api";
 
 export type TicketPrefillData = {
   agent: {
-    id: number;
     username: string;
     full_name: string;
     role: string;
+    nif?: string | null;
   };
   plate_number: string;
   vehicle_found: boolean;
   vehicle: {
-    id: number;
     plate_number: string;
     brand: string;
     model: string;
@@ -47,7 +46,6 @@ type TicketCreateResponse = {
   success: boolean;
   message: string;
   data: {
-    id: number;
     ticket_number: string;
     timestamp: string;
     location: string;
@@ -62,18 +60,17 @@ type TicketCreateResponse = {
     no_violation: string;
     date: string;
     heure: string;
-    no_agent: number;
+    no_agent: string | null;
     article: string | null;
     no_matricule: string | null;
     agent: {
-      id: number;
       username: string;
       first_name: string | null;
       last_name: string | null;
       role: string;
+      nif?: string | null;
     };
     vehicle: {
-      id: number;
       plate_number: string;
       brand: string;
       model: string;
@@ -81,7 +78,6 @@ type TicketCreateResponse = {
       year: number;
     };
     infraction: {
-      id: number;
       code: string;
       article: string | null;
       description: string;

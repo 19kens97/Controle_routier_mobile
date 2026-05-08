@@ -17,7 +17,7 @@ import {
   DocumentType,
   DriverLicenseSearchResponse,
   getVehicleDossierByPlate,
-  getVehicleRegistrationByCode,
+  normalizePlateNumberInput,
   searchDriverLicense,
   searchVehicleCard,
   searchVehicleInsurance,
@@ -28,6 +28,18 @@ type HistoryItem = {
   type: DocumentType;
   query: string;
   at: number;
+};
+
+type DisplayField = {
+  key: string;
+  label: string;
+  value: string;
+};
+
+type DisplaySection = {
+  id: string;
+  title: string;
+  fields: DisplayField[];
 };
 
 const DOCS: {
@@ -53,11 +65,6 @@ const DOCS: {
   {
     type: "VEHICLE_REGISTRATION",
     label: "Immatriculation",
-    placeholder: "Ex: REG-HT-12001",
-  },
-  {
-    type: "VEHICLE_DOSSIER",
-    label: "Dossier plaque",
     placeholder: "Ex: AB-12345",
   },
 ];
@@ -67,27 +74,180 @@ function normalizeValue(v: unknown): string {
   if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
     return String(v);
   }
-  try {
-    return JSON.stringify(v, null, 2);
-  } catch {
-    return String(v);
-  }
+  return "-";
 }
 
 function prettyKey(key: string) {
   return key.replaceAll("_", " ");
 }
 
-function normalizePlateNumberInput(value: string): string {
-  const raw = value.trim().toUpperCase();
-  if (!raw) return "";
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
 
-  const compact = raw.replace(/[^A-Z0-9]/g, "");
-  if (compact.length === 7) {
-    return `${compact.slice(0, 2)}-${compact.slice(2)}`;
+function normalizeDisplayValue(value: unknown): string {
+  if (value === null || value === undefined) return "-";
+  if (typeof value === "boolean") return value ? "Oui" : "Non";
+  if (typeof value === "string") {
+    const isoLike = /^\d{4}-\d{2}-\d{2}(T.*)?$/.test(value);
+    if (isoLike) {
+      const d = new Date(value);
+      if (!Number.isNaN(d.getTime())) {
+        if (value.includes("T")) {
+          return d.toLocaleString("en-US", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+          });
+        }
+        return d.toLocaleDateString("fr-FR");
+      }
+    }
+    return value;
+  }
+  if (typeof value === "number") return String(value);
+  if (Array.isArray(value)) return value.length === 0 ? "-" : `${value.length} element(s)`;
+  return "-";
+}
+
+function toSafeSectionId(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "-").toLowerCase();
+}
+
+function collectSectionsFromObject(
+  sectionId: string,
+  sectionTitle: string,
+  record: Record<string, unknown>
+): DisplaySection[] {
+  const sections: DisplaySection[] = [];
+  const fields: DisplayField[] = [];
+
+  Object.entries(record).forEach(([key, value]) => {
+    if (isPlainObject(value)) {
+      sections.push(
+        ...collectSectionsFromObject(
+          `${sectionId}-${toSafeSectionId(key)}`,
+          prettyKey(key),
+          value
+        )
+      );
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      if (value.length === 0) {
+        fields.push({
+          key,
+          label: prettyKey(key),
+          value: "-",
+        });
+        return;
+      }
+
+      const allObjects = value.every((item) => isPlainObject(item));
+      if (allObjects) {
+        value.forEach((item, index) => {
+          sections.push(
+            ...collectSectionsFromObject(
+              `${sectionId}-${toSafeSectionId(key)}-${index + 1}`,
+              `${prettyKey(key)} ${index + 1}`,
+              item as Record<string, unknown>
+            )
+          );
+        });
+        return;
+      }
+
+      const listValue = value
+        .map((item) => normalizeDisplayValue(item))
+        .filter((item) => item !== "-")
+        .join(", ");
+      fields.push({
+        key,
+        label: prettyKey(key),
+        value: listValue || `${value.length} element(s)`,
+      });
+      return;
+    }
+
+    fields.push({
+      key,
+      label: prettyKey(key),
+      value: normalizeDisplayValue(value),
+    });
+  });
+
+  if (fields.length > 0) {
+    sections.unshift({
+      id: sectionId,
+      title: sectionTitle,
+      fields,
+    });
   }
 
-  return raw;
+  return sections;
+}
+
+function buildGenericSections(data: Record<string, unknown>): DisplaySection[] {
+  return collectSectionsFromObject("informations", "Informations", data);
+}
+
+function buildDriverLicenseSections(data: DriverLicenseSearchResponse): DisplaySection[] {
+  return [
+    {
+      id: "driver-license",
+      title: "Resultat permis",
+      fields: [
+        { key: "nom", label: "Nom", value: normalizeDisplayValue(data.nom || "-") },
+        { key: "dossier", label: "Dossier", value: normalizeDisplayValue(data.dossier) },
+        { key: "nif", label: "NIF", value: normalizeDisplayValue(data.nif) },
+        { key: "adresse", label: "Adresse", value: normalizeDisplayValue(data.adresse) },
+        {
+          key: "date_de_naissance",
+          label: "Date de naissance",
+          value: normalizeDisplayValue(data.date_de_naissance),
+        },
+        { key: "type", label: "Type", value: normalizeDisplayValue(data.type) },
+        { key: "emis_le", label: "Emis le", value: normalizeDisplayValue(data.emis_le) },
+        { key: "expire_le", label: "Expire le", value: normalizeDisplayValue(data.expire_le) },
+        {
+          key: "lieu_emission",
+          label: "Lieu d'emission",
+          value: normalizeDisplayValue(data.lieu_emission),
+        },
+        {
+          key: "groupe_sanguin",
+          label: "Groupe sanguin",
+          value: normalizeDisplayValue(data.groupe_sanguin),
+        },
+        { key: "sexe", label: "Sexe", value: normalizeDisplayValue(data.sexe) },
+      ],
+    },
+  ];
+}
+
+function buildResultSections(
+  selectedType: DocumentType,
+  data: unknown,
+  licenseData: DriverLicenseSearchResponse | null
+): DisplaySection[] {
+  if (!data) return [];
+  if (selectedType === "DRIVER_LICENSE" && licenseData) {
+    return buildDriverLicenseSections(licenseData);
+  }
+  if (isPlainObject(data)) {
+    return buildGenericSections(data);
+  }
+  return [
+    {
+      id: "resultat",
+      title: "Resultat",
+      fields: [{ key: "value", label: "Valeur", value: normalizeDisplayValue(data) }],
+    },
+  ];
 }
 
 function isExpiredDate(value: string | undefined): boolean {
@@ -100,6 +260,29 @@ function isExpiredDate(value: string | undefined): boolean {
   return expiry < today;
 }
 
+function formatTicketDate(value: unknown): string {
+  if (!value || typeof value !== "string") return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  });
+}
+
+function formatTicketTime(value: unknown): string {
+  if (!value || typeof value !== "string") return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleTimeString("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
 export default function DocumentsScreen() {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -110,8 +293,12 @@ export default function DocumentsScreen() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [result, setResult] = useState<any | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [dossierSection, setDossierSection] = useState<VehicleDossierSection>("all");
+  const [dossierSection, setDossierSection] = useState<VehicleDossierSection>("vehicle");
+  const [vehicleCardSection, setVehicleCardSection] = useState<
+    "vehicule" | "assurance" | "proprietaire" | "immatriculation"
+  >("vehicule");
   const [openTicketIndex, setOpenTicketIndex] = useState<number | null>(null);
+  const [showAllDossierTickets, setShowAllDossierTickets] = useState(false);
 
   const meta = useMemo(() => DOCS.find((d) => d.type === docType)!, [docType]);
 
@@ -138,20 +325,20 @@ export default function DocumentsScreen() {
       } else if (docType === "VEHICLE_INSURANCE") {
         data = await searchVehicleInsurance(value);
       } else if (docType === "VEHICLE_REGISTRATION") {
-        data = await getVehicleRegistrationByCode(value);
-      } else if (docType === "VEHICLE_DOSSIER") {
         const normalizedPlate = normalizePlateNumberInput(value);
         if (!normalizedPlate) {
           setErrorMsg("Veuillez saisir un numero d'immatriculation valide.");
           return;
         }
-        data = await getVehicleDossierByPlate(normalizedPlate, dossierSection);
+        data = await getVehicleDossierByPlate(normalizedPlate, "all");
         effectiveQuery = normalizedPlate;
         setQuery(normalizedPlate);
       }
 
       setResult(data);
       setOpenTicketIndex(null);
+      setShowAllDossierTickets(false);
+      setVehicleCardSection("vehicule");
       setHistory((prev) => [{ type: docType, query: effectiveQuery, at: Date.now() }, ...prev].slice(0, 8));
     } catch (e: any) {
       setErrorMsg(
@@ -165,44 +352,55 @@ export default function DocumentsScreen() {
     }
   }
 
-  async function onLoadDossierSection(section: VehicleDossierSection) {
-    const normalizedPlate = normalizePlateNumberInput(query);
-    if (!normalizedPlate) {
-      setErrorMsg("Veuillez saisir un numero d'immatriculation valide.");
-      return;
-    }
-
-    setLoading(true);
-    setErrorMsg(null);
-
-    try {
-      const data = await getVehicleDossierByPlate(normalizedPlate, section);
-      setResult(data);
-      setOpenTicketIndex(null);
-      setDossierSection(section);
-      setQuery(normalizedPlate);
-    } catch (e: any) {
-      setErrorMsg(
-        getApiErrorMessage(e, {
-          notFound: "Aucun dossier trouve pour cette immatriculation.",
-          fallback: "Impossible de charger cette section du dossier.",
-        })
-      );
-    } finally {
-      setLoading(false);
-    }
+  function onLoadDossierSection(section: VehicleDossierSection) {
+    setDossierSection(section);
+    setOpenTicketIndex(null);
+    setShowAllDossierTickets(false);
   }
 
   const canSearch = query.trim().length > 0 && !loading;
-  const isDossierMode = docType === "VEHICLE_DOSSIER";
+  const isDossierMode = docType === "VEHICLE_REGISTRATION";
   const isDriverLicenseMode = docType === "DRIVER_LICENSE";
   const driverResult = isDriverLicenseMode ? (result as DriverLicenseSearchResponse | null) : null;
   const isLicenseExpired = isExpiredDate(driverResult?.expire_le || undefined);
+  const resultSections = useMemo(() => {
+    if (isDossierMode || docType === "VEHICLE_CARD") return [];
+    return buildResultSections(docType, result, driverResult);
+  }, [docType, result, driverResult, isDossierMode]);
   const linkedTickets = Array.isArray(driverResult?.tickets) ? driverResult.tickets : [];
   const linkedTicketsTotal = driverResult?.tickets_summary?.total ?? linkedTickets.length;
   const openTickets = linkedTickets.filter(
     (ticket) => String((ticket as Record<string, unknown>)?.status || "").toUpperCase() === "EN_COURS"
   );
+
+  const dossierData = isDossierMode && isPlainObject(result) ? (result.data as Record<string, unknown> | undefined) : undefined;
+  const dossierSectionData =
+    dossierSection === "vehicle"
+      ? (dossierData?.vehicle as Record<string, unknown> | undefined)
+      : dossierSection === "insurance"
+      ? (dossierData?.insurance as Record<string, unknown> | undefined)
+      : dossierSection === "tickets"
+      ? (dossierData?.tickets as Record<string, unknown> | undefined)
+      : undefined;
+  const dossierAlerts =
+    dossierSection === "insurance"
+      ? (Array.isArray((dossierSectionData?.alerts as unknown[] | undefined)) ? (dossierSectionData?.alerts as Array<Record<string, unknown>>) : [])
+      : dossierSection === "tickets"
+      ? (Array.isArray((dossierSectionData?.alerts as unknown[] | undefined)) ? (dossierSectionData?.alerts as Array<Record<string, unknown>>) : [])
+      : [];
+  const dossierLatestUnpaid =
+    dossierSection === "tickets" && Array.isArray(dossierSectionData?.latest_unpaid)
+      ? (dossierSectionData?.latest_unpaid as Array<Record<string, unknown>>)
+      : [];
+  const dossierAllTickets =
+    dossierSection === "tickets" && Array.isArray(dossierSectionData?.all_tickets)
+      ? (dossierSectionData?.all_tickets as Array<Record<string, unknown>>)
+      : [];
+  const isVehicleCardMode = docType === "VEHICLE_CARD";
+  const vehicleCardData = isVehicleCardMode && isPlainObject(result) ? (result as Record<string, unknown>) : undefined;
+  const vehicleCardSectionData = vehicleCardData
+    ? ((vehicleCardData[vehicleCardSection] as Record<string, unknown> | null | undefined) ?? undefined)
+    : undefined;
 
   return (
     <Screen edges={["top", "left", "right"]}>
@@ -225,7 +423,7 @@ export default function DocumentsScreen() {
                 key={d.type}
                 onPress={() => {
                   setDocType(d.type);
-                  setDossierSection("all");
+                  setDossierSection("vehicle");
                   setResult(null);
                   setErrorMsg(null);
                 }}
@@ -279,37 +477,13 @@ export default function DocumentsScreen() {
           {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}
         </View>
 
-        {isDossierMode && result?.overview ? (
+        {isDossierMode ? (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Resume rapide</Text>
-
-            <View style={styles.kvRow}>
-              <Text style={styles.k}>plaque</Text>
-              <Text style={styles.v}>{normalizeValue(result?.overview?.plate_number)}</Text>
-            </View>
-            <View style={styles.kvRow}>
-              <Text style={styles.k}>vehicule</Text>
-              <Text style={styles.v}>{normalizeValue(result?.overview?.vehicule)}</Text>
-            </View>
-            <View style={styles.kvRow}>
-              <Text style={styles.k}>documents ok</Text>
-              <Text style={styles.v}>{normalizeValue(result?.overview?.documents_ok)}</Text>
-            </View>
-            <View style={styles.kvRow}>
-              <Text style={styles.k}>tickets en cours</Text>
-              <Text style={styles.v}>{normalizeValue(result?.overview?.tickets_en_cours)}</Text>
-            </View>
-            <View style={styles.kvRow}>
-              <Text style={styles.k}>tickets regles</Text>
-              <Text style={styles.v}>{normalizeValue(result?.overview?.tickets_regles)}</Text>
-            </View>
-
             <Text style={styles.cardTitle}>Afficher une section</Text>
             <View style={styles.chipsRow}>
               {[
-                { key: "all", label: "Tout" },
                 { key: "vehicle", label: "Vehicule" },
-                { key: "documents", label: "Papiers" },
+                { key: "insurance", label: "Assurance" },
                 { key: "tickets", label: "Tickets" },
               ].map((item) => {
                 const active = dossierSection === (item.key as VehicleDossierSection);
@@ -333,62 +507,189 @@ export default function DocumentsScreen() {
           </View>
         ) : null}
 
-        {driverResult ? (
+        {isVehicleCardMode && vehicleCardData ? (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Resultat permis</Text>
+            <Text style={styles.cardTitle}>Afficher une carte</Text>
+            <View style={styles.chipsRow}>
+              {[
+                { key: "vehicule", label: "Vehicule" },
+                { key: "assurance", label: "Assurance" },
+                { key: "proprietaire", label: "Proprietaire" },
+                { key: "immatriculation", label: "Immatriculation" },
+              ].map((item) => {
+                const active = vehicleCardSection === (item.key as typeof vehicleCardSection);
+                const hasData = Boolean(vehicleCardData[item.key]);
+                return (
+                  <Pressable
+                    key={item.key}
+                    onPress={() => setVehicleCardSection(item.key as typeof vehicleCardSection)}
+                    style={({ pressed }) => [
+                      styles.chip,
+                      active && styles.chipActive,
+                      !hasData && { opacity: 0.5 },
+                      pressed && { opacity: 0.9 },
+                    ]}
+                  >
+                    <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                      {item.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
 
-            {isLicenseExpired ? (
+        {isDossierMode && dossierSection === "vehicle" && isPlainObject(dossierSectionData) ? (
+          <>
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Vehicule</Text>
+              {isPlainObject(dossierSectionData.vehicule) ? (
+                Object.entries(dossierSectionData.vehicule).map(([key, value]) => (
+                  <View key={`vehicule-${key}`} style={styles.kvRow}>
+                    <Text style={styles.k}>{prettyKey(key)}</Text>
+                    <Text style={styles.v}>{normalizeDisplayValue(value)}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.infoText}>Aucune information vehicule.</Text>
+              )}
+            </View>
+
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Proprietaire</Text>
+              {isPlainObject(dossierSectionData.proprietaire) ? (
+                Object.entries(dossierSectionData.proprietaire).map(([key, value]) => (
+                  <View key={`proprietaire-${key}`} style={styles.kvRow}>
+                    <Text style={styles.k}>{prettyKey(key)}</Text>
+                    <Text style={styles.v}>{normalizeDisplayValue(value)}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.infoText}>Aucun proprietaire associe.</Text>
+              )}
+            </View>
+          </>
+        ) : null}
+
+        {isDossierMode && dossierSection === "insurance" && isPlainObject(dossierSectionData) ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Assurance</Text>
+            {dossierAlerts.map((alert, idx) => (
+              <View key={`insurance-alert-${idx}`} style={styles.alertCritical}>
+                <Text style={styles.alertCriticalText}>
+                  [!] {normalizeDisplayValue(alert.message)}
+                </Text>
+              </View>
+            ))}
+
+            {isPlainObject(dossierSectionData.assurance_en_cours) ? (
+              Object.entries(dossierSectionData.assurance_en_cours).map(([key, value]) => (
+                <View key={`assurance-${key}`} style={styles.kvRow}>
+                  <Text style={styles.k}>{prettyKey(key)}</Text>
+                  <Text style={styles.v}>{normalizeDisplayValue(value)}</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.infoText}>Aucune assurance en cours trouvee.</Text>
+            )}
+          </View>
+        ) : null}
+
+        {isDossierMode && dossierSection === "tickets" && isPlainObject(dossierSectionData) ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Derniers tickets non payes</Text>
+            {dossierAlerts.map((alert, idx) => (
+              <View key={`ticket-alert-${idx}`} style={styles.alertCritical}>
+                <Text style={styles.alertCriticalText}>
+                  [!] {normalizeDisplayValue(alert.message)}
+                </Text>
+              </View>
+            ))}
+
+            {dossierLatestUnpaid.length > 0 ? (
+              <View style={styles.ticketListWrap}>
+                {dossierLatestUnpaid.map((ticket, index) => (
+                  <View key={`latest-unpaid-${index}`} style={styles.ticketItem}>
+                    <Text style={styles.v}>Numero: {normalizeValue(ticket.ticket_number)}</Text>
+                    <Text style={styles.v}>Statut: {normalizeValue(ticket.status)}</Text>
+                    <Text style={styles.v}>Date: {formatTicketDate(ticket.timestamp)}</Text>
+                    <Text style={styles.v}>Heure: {formatTicketTime(ticket.timestamp)}</Text>
+                    <Text style={styles.v}>Lieu: {normalizeValue(ticket.location)}</Text>
+                    <Text style={styles.v}>Motif: {normalizeValue(ticket.motif)}</Text>
+                    <Text style={styles.v}>Montant: {normalizeValue(ticket.montant)}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.infoText}>Aucun ticket non paye en cours.</Text>
+            )}
+
+            <Pressable
+              onPress={() => setShowAllDossierTickets((prev) => !prev)}
+              style={({ pressed }) => [styles.alertBtn, pressed && { opacity: 0.9 }]}
+            >
+              <Text style={styles.alertBtnText}>
+                {showAllDossierTickets ? "Masquer tous les tickets" : "Afficher tous les tickets"}
+              </Text>
+            </Pressable>
+
+            {showAllDossierTickets ? (
+              dossierAllTickets.length > 0 ? (
+                <View style={styles.ticketListWrap}>
+                  {dossierAllTickets.map((ticket, index) => (
+                    <View key={`all-ticket-${index}`} style={styles.ticketItem}>
+                      <Text style={styles.v}>Numero: {normalizeValue(ticket.ticket_number)}</Text>
+                      <Text style={styles.v}>Statut: {normalizeValue(ticket.status)}</Text>
+                      <Text style={styles.v}>Date: {formatTicketDate(ticket.timestamp)}</Text>
+                      <Text style={styles.v}>Heure: {formatTicketTime(ticket.timestamp)}</Text>
+                      <Text style={styles.v}>Lieu: {normalizeValue(ticket.location)}</Text>
+                      <Text style={styles.v}>Motif: {normalizeValue(ticket.motif)}</Text>
+                      <Text style={styles.v}>Montant: {normalizeValue(ticket.montant)}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.infoText}>Aucun ticket lie a cette immatriculation.</Text>
+              )
+            ) : null}
+          </View>
+        ) : null}
+
+        {isVehicleCardMode && vehicleCardData ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>
+              {vehicleCardSection.charAt(0).toUpperCase() + vehicleCardSection.slice(1)}
+            </Text>
+            {vehicleCardSectionData && isPlainObject(vehicleCardSectionData) ? (
+              Object.entries(vehicleCardSectionData).map(([key, value]) => (
+                <View key={`${vehicleCardSection}-${key}`} style={styles.kvRow}>
+                  <Text style={styles.k}>{prettyKey(key)}</Text>
+                  <Text style={styles.v}>{normalizeDisplayValue(value)}</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.infoText}>Aucune information disponible pour cette carte.</Text>
+            )}
+          </View>
+        ) : null}
+
+        {resultSections.map((section) => (
+          <View key={section.id} style={styles.card}>
+            <Text style={styles.cardTitle}>{section.title}</Text>
+            {isDriverLicenseMode && isLicenseExpired && section.id === "driver-license" ? (
               <View style={styles.alertCritical}>
                 <Text style={styles.alertCriticalText}>[!] Permis expire: action requise.</Text>
               </View>
             ) : null}
-
-            <View style={styles.kvRow}>
-              <Text style={styles.k}>Nom</Text>
-              <Text style={styles.v}>{normalizeValue(driverResult.nom || "-")}</Text>
-            </View>
-            <View style={styles.kvRow}>
-              <Text style={styles.k}>Dossier</Text>
-              <Text style={styles.v}>{normalizeValue(driverResult.dossier)}</Text>
-            </View>
-            <View style={styles.kvRow}>
-              <Text style={styles.k}>NIF</Text>
-              <Text style={styles.v}>{normalizeValue(driverResult.nif)}</Text>
-            </View>
-            <View style={styles.kvRow}>
-              <Text style={styles.k}>Adresse</Text>
-              <Text style={styles.v}>{normalizeValue(driverResult.adresse)}</Text>
-            </View>
-            <View style={styles.kvRow}>
-              <Text style={styles.k}>Date de naissance</Text>
-              <Text style={styles.v}>{normalizeValue(driverResult.date_de_naissance)}</Text>
-            </View>
-            <View style={styles.kvRow}>
-              <Text style={styles.k}>Type</Text>
-              <Text style={styles.v}>{normalizeValue(driverResult.type)}</Text>
-            </View>
-            <View style={styles.kvRow}>
-              <Text style={styles.k}>Emis le</Text>
-              <Text style={styles.v}>{normalizeValue(driverResult.emis_le)}</Text>
-            </View>
-            <View style={styles.kvRow}>
-              <Text style={styles.k}>Expire le</Text>
-              <Text style={styles.v}>{normalizeValue(driverResult.expire_le)}</Text>
-            </View>
-            <View style={styles.kvRow}>
-              <Text style={styles.k}>Lieu d'emission</Text>
-              <Text style={styles.v}>{normalizeValue(driverResult.lieu_emission)}</Text>
-            </View>
-            <View style={styles.kvRow}>
-              <Text style={styles.k}>Groupe sanguin</Text>
-              <Text style={styles.v}>{normalizeValue(driverResult.groupe_sanguin)}</Text>
-            </View>
-            <View style={styles.kvRow}>
-              <Text style={styles.k}>Sexe</Text>
-              <Text style={styles.v}>{normalizeValue(driverResult.sexe)}</Text>
-            </View>
+            {section.fields.map((field) => (
+              <View key={`${section.id}-${field.key}`} style={styles.kvRow}>
+                <Text style={styles.k}>{field.label}</Text>
+                <Text style={styles.v}>{field.value}</Text>
+              </View>
+            ))}
           </View>
-        ) : null}
+        ))}
 
         {driverResult ? (
           <View style={styles.card}>
@@ -417,7 +718,8 @@ export default function DocumentsScreen() {
                         <View key={`open-ticket-${index}`} style={styles.ticketItem}>
                           <Text style={styles.v}>Numero: {normalizeValue(record.ticket_number)}</Text>
                           <Text style={styles.v}>Statut: {normalizeValue(record.status)}</Text>
-                          <Text style={styles.v}>Date: {normalizeValue(record.timestamp)}</Text>
+                          <Text style={styles.v}>Date: {formatTicketDate(record.timestamp)}</Text>
+                          <Text style={styles.v}>Heure: {formatTicketTime(record.timestamp)}</Text>
                           <Text style={styles.v}>Lieu: {normalizeValue(record.location)}</Text>
                           <Text style={styles.v}>
                             Infraction:{" "}
@@ -434,18 +736,6 @@ export default function DocumentsScreen() {
             ) : (
               <Text style={styles.infoText}>Aucune verbalisation en cours.</Text>
             )}
-          </View>
-        ) : null}
-
-        {result && !driverResult ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Resultat</Text>
-            {Object.entries(result).map(([k, v]) => (
-              <View key={k} style={styles.kvRow}>
-                <Text style={styles.k}>{prettyKey(k)}</Text>
-                <Text style={styles.v}>{normalizeValue(v)}</Text>
-              </View>
-            ))}
           </View>
         ) : null}
 

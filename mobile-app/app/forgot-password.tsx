@@ -16,8 +16,12 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { requestPasswordReset } from "../src/api/auth.api";
+import { AppTheme } from "../constants/theme";
+import { useAppTheme } from "../src/providers/theme.provider";
 
 export default function ForgotPassword() {
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -122,7 +126,8 @@ export default function ForgotPassword() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 18, justifyContent: "center" },
 
   header: { alignItems: "center", marginBottom: 16 },
@@ -169,5 +174,6 @@ const styles = StyleSheet.create({
   buttonText: { color: "white", fontSize: 15, fontWeight: "800" },
 
   backBtn: { marginTop: 12, alignItems: "center" },
-  backText: { color: "rgba(255,255,255,0.7)", fontWeight: "700" },
-});
+  backText: { color: theme.colors.link, fontWeight: "700" },
+  });
+}

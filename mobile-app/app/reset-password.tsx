@@ -210,6 +210,6 @@ function createStyles(theme: AppTheme) {
   buttonDisabled: { opacity: 0.45 },
 
   back: { alignSelf: "center", marginTop: 14 },
-  backText: { color: "rgba(255,255,255,0.7)", fontSize: theme.font.small, fontWeight: "700" },
+  backText: { color: theme.colors.link, fontSize: theme.font.small, fontWeight: "700" },
   });
 }

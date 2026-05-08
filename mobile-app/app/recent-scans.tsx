@@ -72,6 +72,6 @@ function createStyles(theme: AppTheme) {
     emptyText: { color: theme.colors.textMuted, fontWeight: "700" },
     errorText: { color: theme.colors.danger, fontWeight: "700" },
     linkBtn: { alignSelf: "center", padding: 8 },
-    linkText: { color: theme.colors.accent, fontWeight: "900" },
+    linkText: { color: theme.colors.link, fontWeight: "900" },
   });
 }

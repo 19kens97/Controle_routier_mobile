@@ -22,12 +22,10 @@ import { API_BASE_URL } from "../src/config/api";
 import { useAppTheme } from "../src/providers/theme.provider";
 import { createPageStyles } from "../src/ui/page-styles";
 import { getApiErrorMessage } from "../src/utils/apiErrors";
-import { searchVehicleByPlate, VehicleLookupData } from "../src/api/vehicles.api";
 import { scanGeminiDirect } from "../src/api/gemini.api";
 import {
-  getVehicleRegistrationByCode,
-  searchVehicleCard,
-  searchVehicleInsurance,
+  getVehicleDossierByPlate,
+  normalizePlateNumberInput,
 } from "../src/api/documents.api";
 
 type ScanResult = {
@@ -39,39 +37,99 @@ type ScanResult = {
   source: string;
 };
 
-type DocumentReferenceType = "vehicleCard" | "insurance" | "registration";
 const SEND_RAW_SCAN_IMAGE = true;
 const OCR_ENGINE_FOR_SCAN = "gemini-backend";
 
-type SelectedDocumentState = {
-  type: DocumentReferenceType;
-  label: string;
-  number: string;
-  data: Record<string, unknown>;
+type OwnerData = {
+  nif?: string;
+  nom?: string;
+  prenom?: string;
+  adresse?: string;
+  phone?: string;
+  email?: string;
 };
 
-function normalizeValue(value: unknown): string {
-  if (value === null || value === undefined) return "-";
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
+type VehicleSectionData = {
+  vehicule?: {
+    plate_number?: string;
+    brand?: string;
+    model?: string;
+    color?: string;
+    year?: number;
+  };
+  proprietaire?: OwnerData | null;
+};
 
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
+type InsuranceAlert = {
+  code?: string;
+  severity?: string;
+  message?: string;
+};
+
+type InsuranceSectionData = {
+  assurance_en_cours?: Record<string, unknown> | null;
+  registration?: Record<string, unknown> | null;
+  active_insurances_now_count?: number;
+  alerts?: InsuranceAlert[];
+};
+
+type TicketAlert = {
+  code?: string;
+  severity?: string;
+  message?: string;
+};
+
+type TicketsSectionData = {
+  summary?: Record<string, unknown>;
+  latest_unpaid?: Array<Record<string, unknown>>;
+  all_tickets?: Array<Record<string, unknown>>;
+  alerts?: TicketAlert[];
+};
+type VehicleDossierAllData = {
+  vehicle?: VehicleSectionData;
+  insurance?: InsuranceSectionData;
+  tickets?: TicketsSectionData;
+};
+
+function formatDate(value: unknown): string {
+  if (!value || typeof value !== "string") return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  const hasTime = value.includes("T");
+  if (hasTime) {
+    return d.toLocaleString("en-US", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
   }
+  return d.toLocaleDateString("fr-FR");
 }
 
-function prettyKey(key: string) {
-  return key.replaceAll("_", " ");
+function formatTicketDate(value: unknown): string {
+  if (!value || typeof value !== "string") return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  });
 }
 
-function toRecord(value: unknown): Record<string, unknown> {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
-  }
-  return { value };
+function formatTicketTime(value: unknown): string {
+  if (!value || typeof value !== "string") return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleTimeString("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
 }
 
 export default function ScanPlateScreen() {
@@ -84,14 +142,14 @@ export default function ScanPlateScreen() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [plateQuery, setPlateQuery] = useState("");
-  const [vehicleData, setVehicleData] = useState<VehicleLookupData | null>(null);
-  const [vehicleLookupError, setVehicleLookupError] = useState<string | null>(null);
   const [documentLookupError, setDocumentLookupError] = useState<string | null>(null);
   const [documentLoading, setDocumentLoading] = useState(false);
-  const [documentDetailsLoading, setDocumentDetailsLoading] = useState(false);
-  const [documentDetailsError, setDocumentDetailsError] = useState<string | null>(null);
-  const [selectedDocument, setSelectedDocument] = useState<SelectedDocumentState | null>(null);
   const [modelUsed, setModelUsed] = useState<string | null>(null);
+  const [vehicleSection, setVehicleSection] = useState<VehicleSectionData | null>(null);
+  const [insuranceSection, setInsuranceSection] = useState<InsuranceSectionData | null>(null);
+  const [ticketsSection, setTicketsSection] = useState<TicketsSectionData | null>(null);
+  const [showAllTickets, setShowAllTickets] = useState(false);
+  const [activeSection, setActiveSection] = useState<"vehicle" | "insurance" | "tickets">("vehicle");
 
   const confidenceLabel = useMemo(() => {
     if (!result) return "";
@@ -108,35 +166,6 @@ export default function ScanPlateScreen() {
     if (result.source === "gemini") return "Gemini";
     return result.source;
   }, [result]);
-
-  const documentReferences = useMemo(() => {
-    if (!vehicleData) return [];
-
-    const firstCard = vehicleData.vehicle_cards[0]?.card_number;
-    const firstInsurance = vehicleData.insurances[0]?.policy_number;
-    const registrationCode = vehicleData.registration?.registration_code;
-
-    return [
-      {
-        type: "vehicleCard" as const,
-        label: "Numero carte vehicule",
-        number: firstCard || "-",
-        isAvailable: Boolean(firstCard),
-      },
-      {
-        type: "insurance" as const,
-        label: "Numero carte d'assurance",
-        number: firstInsurance || "-",
-        isAvailable: Boolean(firstInsurance),
-      },
-      {
-        type: "registration" as const,
-        label: "Numero papier d'immatriculation",
-        number: registrationCode || "-",
-        isAvailable: Boolean(registrationCode),
-      },
-    ];
-  }, [vehicleData]);
 
   const promptOpenSettings = () => {
     Alert.alert(
@@ -209,22 +238,17 @@ export default function ScanPlateScreen() {
     }
     setResult(null);
     setPlateQuery("");
-    setVehicleData(null);
-    setVehicleLookupError(null);
     setDocumentLookupError(null);
-    setSelectedDocument(null);
-    setDocumentDetailsError(null);
     setModelUsed(null);
-  };
-
-  const loadVehicleByPlate = async (plateNumber: string) => {
-    const vehicleResponse = await searchVehicleByPlate(plateNumber);
-    setVehicleData(vehicleResponse.data);
-    return vehicleResponse.data;
+    setVehicleSection(null);
+    setInsuranceSection(null);
+    setTicketsSection(null);
+    setShowAllTickets(false);
+    setActiveSection("vehicle");
   };
 
   const searchDocumentsFromPlate = async (rawPlate?: string) => {
-    const value = (rawPlate ?? plateQuery).trim().toUpperCase();
+    const value = normalizePlateNumberInput(rawPlate ?? plateQuery);
 
     if (!value) {
       setDocumentLookupError("Saisis ou confirme d'abord le numero d'immatriculation.");
@@ -233,12 +257,18 @@ export default function ScanPlateScreen() {
 
     setDocumentLoading(true);
     setDocumentLookupError(null);
-    setVehicleLookupError(null);
-    setSelectedDocument(null);
-    setDocumentDetailsError(null);
+    setVehicleSection(null);
+    setInsuranceSection(null);
+    setTicketsSection(null);
+    setShowAllTickets(false);
+    setActiveSection("vehicle");
 
     try {
-      await loadVehicleByPlate(value);
+      const dossier = await getVehicleDossierByPlate(value, "all");
+      const allData = (dossier?.data as VehicleDossierAllData) ?? {};
+      setVehicleSection(allData.vehicle ?? null);
+      setInsuranceSection(allData.insurance ?? null);
+      setTicketsSection(allData.tickets ?? null);
       setPlateQuery(value);
     } catch (lookupErr: any) {
       setDocumentLookupError(
@@ -249,49 +279,6 @@ export default function ScanPlateScreen() {
       );
     } finally {
       setDocumentLoading(false);
-    }
-  };
-
-  const loadDocumentDetails = async (
-    docType: DocumentReferenceType,
-    label: string,
-    number: string
-  ) => {
-    if (!number || number === "-") {
-      setDocumentDetailsError("Aucun numero disponible pour ce document.");
-      return;
-    }
-
-    setDocumentDetailsLoading(true);
-    setDocumentDetailsError(null);
-    setSelectedDocument(null);
-
-    try {
-      let data: Record<string, unknown> | null = null;
-
-      if (docType === "vehicleCard") {
-        data = toRecord(await searchVehicleCard(number));
-      } else if (docType === "insurance") {
-        data = toRecord(await searchVehicleInsurance(number));
-      } else {
-        data = toRecord(await getVehicleRegistrationByCode(number));
-      }
-
-      setSelectedDocument({
-        type: docType,
-        label,
-        number,
-        data: data ?? {},
-      });
-    } catch (lookupErr: any) {
-      setDocumentDetailsError(
-        getApiErrorMessage(lookupErr, {
-          notFound: "Document introuvable pour ce numero.",
-          fallback: "Impossible de charger les details du document selectionne.",
-        })
-      );
-    } finally {
-      setDocumentDetailsLoading(false);
     }
   };
 
@@ -370,12 +357,13 @@ export default function ScanPlateScreen() {
     setError(null);
     setResult(null);
     setPlateQuery("");
-    setVehicleData(null);
-    setVehicleLookupError(null);
     setDocumentLookupError(null);
-    setSelectedDocument(null);
-    setDocumentDetailsError(null);
     setModelUsed(null);
+    setVehicleSection(null);
+    setInsuranceSection(null);
+    setTicketsSection(null);
+    setShowAllTickets(false);
+    setActiveSection("vehicle");
 
     try {
       const response = await scanGeminiDirect(imageUri);
@@ -404,16 +392,7 @@ export default function ScanPlateScreen() {
       setPlateQuery(plateNumber);
 
       if (plateNumber) {
-        try {
-          await loadVehicleByPlate(plateNumber);
-        } catch (lookupErr: any) {
-          setVehicleLookupError(
-            getApiErrorMessage(lookupErr, {
-              notFound: "Plaque detectee, mais vehicule introuvable dans la base.",
-              fallback: "Plaque detectee, mais impossible de charger les informations du vehicule.",
-            })
-          );
-        }
+        await searchDocumentsFromPlate(plateNumber);
       } else {
         setError(
           raw?.message ||
@@ -582,79 +561,135 @@ export default function ScanPlateScreen() {
             </View>
           ) : null}
 
-          {vehicleLookupError ? <Text style={styles.warningText}>{vehicleLookupError}</Text> : null}
-
-          {vehicleData ? (
-            <View style={styles.resultBox}>
-              <Text style={styles.resultTitle}>Analyse vehicule</Text>
-              <Text style={styles.value}>
-                Vehicule: {vehicleData.brand} {vehicleData.model}
-              </Text>
-              <Text style={styles.value}>Plaque base: {vehicleData.plate_number}</Text>
-              <Text style={styles.value}>Couleur: {vehicleData.color}</Text>
-              <Text style={styles.value}>Annee: {vehicleData.year}</Text>
-              <Text style={styles.value}>
-                Carte vehicule: {vehicleData.vehicle_cards[0]?.card_number || "-"}
-              </Text>
-              <Text style={styles.value}>
-                Statut carte: {vehicleData.vehicle_cards[0]?.status || "-"}
-              </Text>
-              <Text style={styles.value}>
-                Assurance: {vehicleData.insurances[0]?.policy_number || "-"}
-              </Text>
-              <Text style={styles.value}>
-                Compagnie: {vehicleData.insurances[0]?.company_name || "-"}
-              </Text>
-              <Text style={styles.value}>
-                Immatriculation: {vehicleData.registration?.registration_code || "-"}
-              </Text>
+          {(vehicleSection || insuranceSection || ticketsSection) ? (
+            <View style={styles.tabsRow}>
+              <Pressable
+                style={[styles.tabBtn, activeSection === "vehicle" && styles.tabBtnActive]}
+                onPress={() => setActiveSection("vehicle")}
+              >
+                <Text style={styles.tabBtnText}>Vehicule</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.tabBtn, activeSection === "insurance" && styles.tabBtnActive]}
+                onPress={() => setActiveSection("insurance")}
+              >
+                <Text style={styles.tabBtnText}>Assurance</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.tabBtn, activeSection === "tickets" && styles.tabBtnActive]}
+                onPress={() => setActiveSection("tickets")}
+              >
+                <Text style={styles.tabBtnText}>Tickets</Text>
+              </Pressable>
             </View>
           ) : null}
 
-          {vehicleData ? (
+          {vehicleSection && activeSection === "vehicle" ? (
             <View style={styles.resultBox}>
-              <Text style={styles.resultTitle}>Documents associes</Text>
-              <Text style={styles.helperText}>
-                Clique sur le type de papier pour afficher les details correspondants.
-              </Text>
-              {documentReferences.map((item) => (
-                <Pressable
-                  key={item.type}
-                  style={[
-                    styles.docItem,
-                    !item.isAvailable && { opacity: 0.6 },
-                  ]}
-                  onPress={() => loadDocumentDetails(item.type, item.label, item.number)}
-                  disabled={!item.isAvailable || documentDetailsLoading}
-                >
-                  <Text style={styles.docItemLabel}>{item.label}</Text>
-                  <Text style={styles.docItemNumber}>{item.number}</Text>
-                </Pressable>
-              ))}
-
-              {documentDetailsLoading ? (
-                <View style={styles.loadingRow}>
-                  <ActivityIndicator color="#000" size="small" />
-                  <Text style={styles.scanBtnText}>Chargement du document...</Text>
-                </View>
-              ) : null}
-
-              {documentDetailsError ? (
-                <Text style={styles.errorText}>{documentDetailsError}</Text>
-              ) : null}
+              <Text style={styles.resultTitle}>Vehicule</Text>
+              <Text style={styles.resultTitle}>Proprietaire</Text>
+              <Text style={styles.value}>Marque: {vehicleSection.vehicule?.brand || "-"}</Text>
+              <Text style={styles.value}>Modele: {vehicleSection.vehicule?.model || "-"}</Text>
+              <Text style={styles.value}>Plaque: {vehicleSection.vehicule?.plate_number || "-"}</Text>
+              <Text style={styles.value}>Couleur: {vehicleSection.vehicule?.color || "-"}</Text>
+              <Text style={styles.value}>Annee: {vehicleSection.vehicule?.year || "-"}</Text>
+              <Text style={styles.value}>NIF: {vehicleSection.proprietaire?.nif || "-"}</Text>
+              <Text style={styles.value}>Nom: {vehicleSection.proprietaire?.nom || "-"}</Text>
+              <Text style={styles.value}>Prenom: {vehicleSection.proprietaire?.prenom || "-"}</Text>
+              <Text style={styles.value}>Adresse: {vehicleSection.proprietaire?.adresse || "-"}</Text>
+              <Text style={styles.value}>Telephone: {vehicleSection.proprietaire?.phone || "-"}</Text>
+              <Text style={styles.value}>Email: {vehicleSection.proprietaire?.email || "-"}</Text>
             </View>
           ) : null}
 
-          {selectedDocument ? (
+          {insuranceSection && activeSection === "insurance" ? (
             <View style={styles.resultBox}>
-              <Text style={styles.resultTitle}>Details: {selectedDocument.label}</Text>
-              <Text style={styles.value}>Numero: {selectedDocument.number}</Text>
-              {Object.entries(selectedDocument.data).map(([key, value]) => (
-                <View key={key} style={styles.detailRow}>
-                  <Text style={styles.detailKey}>{prettyKey(key)}</Text>
-                  <Text style={styles.value}>{normalizeValue(value)}</Text>
-                </View>
+              <Text style={styles.resultTitle}>Assurance</Text>
+              <Text style={styles.value}>
+                Police: {String(insuranceSection.assurance_en_cours?.policy_number ?? "-")}
+              </Text>
+              <Text style={styles.value}>
+                Compagnie: {String(insuranceSection.assurance_en_cours?.company_name ?? "-")}
+              </Text>
+              <Text style={styles.value}>
+                Emise le: {formatDate(insuranceSection.assurance_en_cours?.issued_date)}
+              </Text>
+              <Text style={styles.value}>
+                Expire le: {formatDate(insuranceSection.assurance_en_cours?.expiration_date)}
+              </Text>
+              <Text style={styles.value}>
+                Immatriculation: {String(insuranceSection.registration?.registration_code ?? "-")}
+              </Text>
+              {insuranceSection.alerts?.map((alert, idx) => (
+                <Text key={`${alert.code || "assurance-alert"}-${idx}`} style={styles.warningText}>
+                  Alerte: {alert.message || "Anomalie assurance detectee."}
+                </Text>
               ))}
+            </View>
+          ) : null}
+
+          {ticketsSection && activeSection === "tickets" ? (
+            <View style={styles.resultBox}>
+              <Text style={styles.resultTitle}>Dernier ticket</Text>
+              {ticketsSection.latest_unpaid && ticketsSection.latest_unpaid.length > 0 ? (
+                <>
+                  <Text style={styles.value}>
+                    Numero: {String(ticketsSection.latest_unpaid[0]?.ticket_number ?? "-")}
+                  </Text>
+                  <Text style={styles.value}>
+                    Statut: {String(ticketsSection.latest_unpaid[0]?.status ?? "-")}
+                  </Text>
+                  <Text style={styles.value}>
+                    Date: {formatTicketDate(ticketsSection.latest_unpaid[0]?.timestamp)}
+                  </Text>
+                  <Text style={styles.value}>
+                    Heure: {formatTicketTime(ticketsSection.latest_unpaid[0]?.timestamp)}
+                  </Text>
+                  <Text style={styles.value}>
+                    Lieu: {String(ticketsSection.latest_unpaid[0]?.location ?? "-")}
+                  </Text>
+                  <Text style={styles.value}>
+                    Motif: {String(ticketsSection.latest_unpaid[0]?.motif ?? "-")}
+                  </Text>
+                  <Text style={styles.value}>
+                    Montant: {String(ticketsSection.latest_unpaid[0]?.montant ?? "-")}
+                  </Text>
+                </>
+              ) : (
+                <Text style={styles.value}>Aucun ticket impaye en cours.</Text>
+              )}
+
+              {ticketsSection.alerts?.map((alert, idx) => (
+                <Text key={`${alert.code || "ticket-alert"}-${idx}`} style={styles.warningText}>
+                  Alerte: {alert.message || "Anomalie tickets detectee."}
+                </Text>
+              ))}
+
+              <Pressable
+                style={styles.docItem}
+                onPress={() => setShowAllTickets((prev) => !prev)}
+              >
+                <Text style={styles.docItemNumber}>
+                  {showAllTickets ? "Masquer tous les tickets" : "Afficher tous les tickets"}
+                </Text>
+              </Pressable>
+
+              {showAllTickets &&
+                (ticketsSection.all_tickets?.length ? (
+                  ticketsSection.all_tickets.map((ticket, idx) => (
+                    <View key={`ticket-${idx}`} style={styles.detailRow}>
+                      <Text style={styles.value}>
+                        #{String(ticket.ticket_number ?? "-")} | {String(ticket.status ?? "-")}
+                      </Text>
+                      <Text style={styles.value}>Date: {formatTicketDate(ticket.timestamp)}</Text>
+                      <Text style={styles.value}>Heure: {formatTicketTime(ticket.timestamp)}</Text>
+                      <Text style={styles.value}>Motif: {String(ticket.motif ?? "-")}</Text>
+                      <Text style={styles.value}>Montant: {String(ticket.montant ?? "-")}</Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.value}>Aucun ticket lie a cette immatriculation.</Text>
+                ))}
             </View>
           ) : null}
         </View>
@@ -767,6 +802,28 @@ function createStyles(theme: AppTheme) {
       fontSize: theme.font.small,
       fontWeight: "700",
     },
+    tabsRow: {
+      flexDirection: "row",
+      gap: 8,
+    },
+    tabBtn: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: theme.colors.border2,
+      borderRadius: theme.radius.md,
+      paddingVertical: 8,
+      alignItems: "center",
+      backgroundColor: theme.colors.surface2,
+    },
+    tabBtnActive: {
+      borderColor: theme.colors.accentBorder,
+      backgroundColor: theme.colors.accentSoft,
+    },
+    tabBtnText: {
+      color: theme.colors.text,
+      fontSize: theme.font.small,
+      fontWeight: "900",
+    },
     resultBox: {
       gap: 6,
       borderRadius: theme.radius.md,
@@ -828,7 +885,7 @@ function createStyles(theme: AppTheme) {
       paddingHorizontal: 8,
     },
     linkText: {
-      color: "rgba(255,215,0,0.9)",
+      color: theme.colors.link,
       fontWeight: "900",
       fontSize: theme.font.body,
     },

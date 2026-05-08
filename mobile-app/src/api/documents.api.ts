@@ -4,10 +4,9 @@ export type DocumentType =
   | "DRIVER_LICENSE"
   | "VEHICLE_CARD"
   | "VEHICLE_INSURANCE"
-  | "VEHICLE_REGISTRATION"
-  | "VEHICLE_DOSSIER";
+  | "VEHICLE_REGISTRATION";
 
-export type VehicleDossierSection = "all" | "vehicle" | "documents" | "tickets";
+export type VehicleDossierSection = "vehicle" | "insurance" | "tickets" | "all";
 
 export type DriverLicenseSearchTicketSummary = {
   total: number;
@@ -30,6 +29,18 @@ export type DriverLicenseSearchResponse = {
   tickets_summary?: DriverLicenseSearchTicketSummary;
   tickets?: Array<Record<string, unknown>>;
 };
+
+export function normalizePlateNumberInput(value: string): string {
+  const raw = value.trim().toUpperCase();
+  if (!raw) return "";
+
+  const compact = raw.replace(/[^A-Z0-9]/g, "");
+  if (compact.length === 7) {
+    return `${compact.slice(0, 2)}-${compact.slice(2)}`;
+  }
+
+  return raw;
+}
 
 function unwrapApiPayload<T>(payload: unknown): T {
   if (

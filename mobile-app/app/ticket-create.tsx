@@ -507,7 +507,7 @@ function createStyles(theme: AppTheme) {
       paddingHorizontal: 8,
     },
     linkText: {
-      color: "rgba(255,215,0,0.9)",
+      color: theme.colors.link,
       fontWeight: "900",
       fontSize: theme.font.body,
     },

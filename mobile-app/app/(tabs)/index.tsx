@@ -137,8 +137,7 @@ export default function HomeDashboard() {
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
-          paddingHorizontal: pageInsets.horizontal,
-          paddingTop: pageInsets.vertical,
+          ...pageStyles.content,
           paddingBottom: pageInsets.vertical + insets.bottom + tabBarHeight,
         }}
         showsVerticalScrollIndicator={false}
@@ -260,20 +259,24 @@ export default function HomeDashboard() {
           </View>
         </View>
 
-        <View style={pageStyles.cardHeader}>
-          <Text style={styles.listTitle}>Activite recente</Text>
-          <Pressable onPress={() => router.push("/(tabs)/profile")}>
-            <Text style={styles.link}>Profil</Text>
-          </Pressable>
-        </View>
+        <View style={styles.activityBlock}>
+          <View style={pageStyles.cardHeader}>
+            <Text style={styles.listTitle}>Activite recente</Text>
+            <Pressable onPress={() => router.push("/(tabs)/profile")}>
+              <Text style={styles.link}>Profil</Text>
+            </Pressable>
+          </View>
 
-        {activity.length > 0 ? (
-          activity.map((item) => (
-            <ActivityRow key={item.id} item={item} styles={styles} theme={theme} />
-          ))
-        ) : (
-          <Text style={styles.emptyText}>Aucune activite recente disponible.</Text>
-        )}
+          {activity.length > 0 ? (
+            <View style={styles.activityList}>
+              {activity.map((item) => (
+                <ActivityRow key={item.id} item={item} styles={styles} theme={theme} />
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.emptyText}>Aucune activite recente disponible.</Text>
+          )}
+        </View>
       </ScrollView>
     </Screen>
   );
@@ -371,7 +374,6 @@ function createStyles(theme: AppTheme) {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "flex-start",
-      marginBottom: theme.spacing.md,
     },
     hi: { color: theme.colors.text, fontSize: theme.font.h1, fontWeight: "800" },
     role: {
@@ -399,7 +401,6 @@ function createStyles(theme: AppTheme) {
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
-      marginBottom: theme.spacing.md,
     },
     infoText: {
       color: theme.colors.textMuted,
@@ -447,7 +448,6 @@ function createStyles(theme: AppTheme) {
       flexDirection: "row",
       flexWrap: "wrap",
       gap: 12,
-      marginBottom: theme.spacing.md,
     },
     actionCard: {
       width: "48%",
@@ -512,6 +512,12 @@ function createStyles(theme: AppTheme) {
       fontSize: theme.font.body,
       fontWeight: "900",
     },
+    activityBlock: {
+      gap: 10,
+    },
+    activityList: {
+      gap: 10,
+    },
     row: {
       flexDirection: "row",
       alignItems: "center",
@@ -521,7 +527,6 @@ function createStyles(theme: AppTheme) {
       backgroundColor: theme.colors.surface2,
       borderWidth: 1,
       borderColor: theme.colors.border2,
-      marginBottom: 10,
     },
     rowTitle: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: "900" },
     rowSub: {
