@@ -548,7 +548,7 @@ function createStyles(theme: AppTheme) {
       borderColor: theme.colors.border2,
     },
     rowBadgeText: {
-      color: "rgba(255,255,255,0.85)",
+      color: theme.colors.text,
       fontSize: theme.font.small,
       fontWeight: "900",
     },

@@ -418,7 +418,7 @@ function createStyles(theme: AppTheme) {
     borderColor: theme.colors.border2,
   },
   roleText: {
-    color: "rgba(255,255,255,0.85)",
+    color: theme.colors.text,
     fontWeight: "900",
     fontSize: theme.font.small,
   },
@@ -512,7 +512,7 @@ function createStyles(theme: AppTheme) {
     borderColor: theme.colors.border2,
   },
   smallBtnText: {
-    color: "rgba(255,255,255,0.85)",
+    color: theme.colors.text,
     fontWeight: "900",
     fontSize: theme.font.small,
   },
@@ -560,7 +560,7 @@ function createStyles(theme: AppTheme) {
     borderColor: theme.colors.border2,
   },
   btnText: {
-    color: "rgba(255,255,255,0.9)",
+    color: theme.colors.text,
     fontWeight: "900",
     fontSize: theme.font.body,
   },
