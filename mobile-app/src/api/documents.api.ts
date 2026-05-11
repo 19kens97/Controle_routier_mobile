@@ -30,6 +30,22 @@ export type DriverLicenseSearchResponse = {
   tickets?: Array<Record<string, unknown>>;
 };
 
+export function normalizeDossierInput(value: string): string {
+  const raw = value.trim().toUpperCase();
+  if (!raw) return "";
+
+  const compact = raw.replace(/[^A-Z0-9]/g, "");
+  if (
+    compact.length === 9 &&
+    /^[A-Z]{2}$/.test(compact.slice(0, 2)) &&
+    /^\d{5}$/.test(compact.slice(2, 7)) &&
+    /^[A-Z]{2}$/.test(compact.slice(7, 9))
+  ) {
+    return `${compact.slice(0, 2)}-${compact.slice(2, 7)}-${compact.slice(7, 9)}`;
+  }
+  return raw;
+}
+
 export function normalizePlateNumberInput(value: string): string {
   const raw = value.trim().toUpperCase();
   if (!raw) return "";
@@ -55,9 +71,9 @@ function unwrapApiPayload<T>(payload: unknown): T {
   return payload as T;
 }
 
-export async function searchDriverLicense(license_number: string) {
+export async function searchDriverLicense(dossier: string) {
   const res = await api.get("documents/driver-license/search", {
-    params: { license_number },
+    params: { dossier: normalizeDossierInput(dossier) },
   });
   return unwrapApiPayload<DriverLicenseSearchResponse>(res.data);
 }

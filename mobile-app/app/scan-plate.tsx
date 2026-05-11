@@ -49,46 +49,34 @@ type OwnerData = {
   email?: string;
 };
 
-type VehicleSectionData = {
-  vehicule?: {
-    plate_number?: string;
-    brand?: string;
-    model?: string;
-    color?: string;
-    year?: number;
-  };
+type VehicleData = {
+  plaque?: string;
+  marque?: string;
+  modele?: string;
+  couleur?: string;
+  annee?: number;
+};
+
+type InsuranceData = {
+  numero_police?: string;
+  compagnie?: string;
+  date_emission?: string;
+  date_expiration?: string;
+  est_active?: boolean;
+};
+
+type RegistrationData = {
+  numero_immatriculation?: string;
+  type?: string;
+  date_emission?: string;
+  date_expiration?: string;
+};
+
+type DocumentsResultData = {
+  vehicule?: VehicleData | null;
   proprietaire?: OwnerData | null;
-};
-
-type InsuranceAlert = {
-  code?: string;
-  severity?: string;
-  message?: string;
-};
-
-type InsuranceSectionData = {
-  assurance_en_cours?: Record<string, unknown> | null;
-  registration?: Record<string, unknown> | null;
-  active_insurances_now_count?: number;
-  alerts?: InsuranceAlert[];
-};
-
-type TicketAlert = {
-  code?: string;
-  severity?: string;
-  message?: string;
-};
-
-type TicketsSectionData = {
-  summary?: Record<string, unknown>;
-  latest_unpaid?: Array<Record<string, unknown>>;
-  all_tickets?: Array<Record<string, unknown>>;
-  alerts?: TicketAlert[];
-};
-type VehicleDossierAllData = {
-  vehicle?: VehicleSectionData;
-  insurance?: InsuranceSectionData;
-  tickets?: TicketsSectionData;
+  assurance?: InsuranceData | null;
+  immatriculation?: RegistrationData | null;
 };
 
 function formatDate(value: unknown): string {
@@ -109,29 +97,6 @@ function formatDate(value: unknown): string {
   return d.toLocaleDateString("fr-FR");
 }
 
-function formatTicketDate(value: unknown): string {
-  if (!value || typeof value !== "string") return "-";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleDateString("fr-FR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-  });
-}
-
-function formatTicketTime(value: unknown): string {
-  if (!value || typeof value !== "string") return "-";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "-";
-  return d.toLocaleTimeString("fr-FR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
-}
-
 export default function ScanPlateScreen() {
   const { theme } = useAppTheme();
   const pageStyles = useMemo(() => createPageStyles(theme), [theme]);
@@ -145,11 +110,10 @@ export default function ScanPlateScreen() {
   const [documentLookupError, setDocumentLookupError] = useState<string | null>(null);
   const [documentLoading, setDocumentLoading] = useState(false);
   const [modelUsed, setModelUsed] = useState<string | null>(null);
-  const [vehicleSection, setVehicleSection] = useState<VehicleSectionData | null>(null);
-  const [insuranceSection, setInsuranceSection] = useState<InsuranceSectionData | null>(null);
-  const [ticketsSection, setTicketsSection] = useState<TicketsSectionData | null>(null);
-  const [showAllTickets, setShowAllTickets] = useState(false);
-  const [activeSection, setActiveSection] = useState<"vehicle" | "insurance" | "tickets">("vehicle");
+  const [documentsResult, setDocumentsResult] = useState<DocumentsResultData | null>(null);
+  const [activeSection, setActiveSection] = useState<
+    "vehicule" | "proprietaire" | "assurance" | "immatriculation"
+  >("vehicule");
 
   const confidenceLabel = useMemo(() => {
     if (!result) return "";
@@ -240,11 +204,8 @@ export default function ScanPlateScreen() {
     setPlateQuery("");
     setDocumentLookupError(null);
     setModelUsed(null);
-    setVehicleSection(null);
-    setInsuranceSection(null);
-    setTicketsSection(null);
-    setShowAllTickets(false);
-    setActiveSection("vehicle");
+    setDocumentsResult(null);
+    setActiveSection("vehicule");
   };
 
   const searchDocumentsFromPlate = async (rawPlate?: string) => {
@@ -257,18 +218,29 @@ export default function ScanPlateScreen() {
 
     setDocumentLoading(true);
     setDocumentLookupError(null);
-    setVehicleSection(null);
-    setInsuranceSection(null);
-    setTicketsSection(null);
-    setShowAllTickets(false);
-    setActiveSection("vehicle");
+    setDocumentsResult(null);
+    setActiveSection("vehicule");
 
     try {
       const dossier = await getVehicleDossierByPlate(value, "all");
-      const allData = (dossier?.data as VehicleDossierAllData) ?? {};
-      setVehicleSection(allData.vehicle ?? null);
-      setInsuranceSection(allData.insurance ?? null);
-      setTicketsSection(allData.tickets ?? null);
+      const allData = (dossier?.data ?? {}) as Record<string, any>;
+      setDocumentsResult({
+        vehicule: allData?.vehicle?.vehicule ?? null,
+        proprietaire: allData?.vehicle?.proprietaire ?? null,
+        assurance: allData?.insurance?.assurance_en_cours
+          ? {
+              numero_police: allData.insurance.assurance_en_cours.policy_number,
+              compagnie: allData.insurance.assurance_en_cours.company_name,
+              date_emission: allData.insurance.assurance_en_cours.issued_date,
+              date_expiration: allData.insurance.assurance_en_cours.expiration_date,
+            }
+          : null,
+        immatriculation: allData?.insurance?.registration
+          ? {
+              numero_immatriculation: allData.insurance.registration.registration_code,
+            }
+          : null,
+      });
       setPlateQuery(value);
     } catch (lookupErr: any) {
       setDocumentLookupError(
@@ -359,11 +331,8 @@ export default function ScanPlateScreen() {
     setPlateQuery("");
     setDocumentLookupError(null);
     setModelUsed(null);
-    setVehicleSection(null);
-    setInsuranceSection(null);
-    setTicketsSection(null);
-    setShowAllTickets(false);
-    setActiveSection("vehicle");
+    setDocumentsResult(null);
+    setActiveSection("vehicule");
 
     try {
       const response = await scanGeminiDirect(imageUri);
@@ -379,6 +348,7 @@ export default function ScanPlateScreen() {
             ? [plateNumber]
             : [];
       const model = typeof raw?.model_used === "string" ? raw.model_used : null;
+      const documents = (raw?.documents ?? null) as DocumentsResultData | null;
 
       setModelUsed(model);
       setResult({
@@ -390,10 +360,13 @@ export default function ScanPlateScreen() {
         source: "gemini",
       });
       setPlateQuery(plateNumber);
+      if (documents) {
+        setDocumentsResult(documents);
+      }
 
-      if (plateNumber) {
+      if (plateNumber && !documents) {
         await searchDocumentsFromPlate(plateNumber);
-      } else {
+      } else if (!plateNumber) {
         setError(
           raw?.message ||
             raw?.detail ||
@@ -486,8 +459,6 @@ export default function ScanPlateScreen() {
               <Text style={styles.value}>Plaque: {result.plate || "Non detectee"}</Text>
               <Text style={styles.value}>Confiance: {confidenceLabel}</Text>
               <Text style={styles.value}>Fiable: {result.is_reliable ? "Oui" : "Non"}</Text>
-              <Text style={styles.value}>Source scan: {sourceLabel || "-"}</Text>
-              <Text style={styles.value}>Modele Gemini: {modelUsed || "-"}</Text>
               <Text style={styles.value}>
                 Candidats: {result.candidates.length ? result.candidates.join(", ") : "-"}
               </Text>
@@ -536,160 +507,92 @@ export default function ScanPlateScreen() {
                 Le format final est interprete et decoupe cote backend.
               </Text>
 
-              <Pressable
-                style={[
-                  pageStyles.primaryButton,
-                  !plateQuery.trim() && { opacity: 0.6 },
-                  documentLoading && { opacity: 0.7 },
-                ]}
-                onPress={() => searchDocumentsFromPlate()}
-                disabled={documentLoading || !plateQuery.trim()}
-              >
-                {documentLoading ? (
-                  <View style={styles.loadingRow}>
-                    <ActivityIndicator color="#000" size="small" />
-                    <Text style={styles.scanBtnText}>Recherche documents...</Text>
-                  </View>
-                ) : (
-                  <Text style={styles.scanBtnText}>Chercher vehicule et documents</Text>
-                )}
-              </Pressable>
-
               {documentLookupError ? (
                 <Text style={styles.errorText}>{documentLookupError}</Text>
               ) : null}
             </View>
           ) : null}
 
-          {(vehicleSection || insuranceSection || ticketsSection) ? (
+          {documentsResult ? (
             <View style={styles.tabsRow}>
               <Pressable
-                style={[styles.tabBtn, activeSection === "vehicle" && styles.tabBtnActive]}
-                onPress={() => setActiveSection("vehicle")}
+                style={[styles.tabBtn, activeSection === "vehicule" && styles.tabBtnActive]}
+                onPress={() => setActiveSection("vehicule")}
               >
                 <Text style={styles.tabBtnText}>Vehicule</Text>
               </Pressable>
               <Pressable
-                style={[styles.tabBtn, activeSection === "insurance" && styles.tabBtnActive]}
-                onPress={() => setActiveSection("insurance")}
+                style={[styles.tabBtn, activeSection === "proprietaire" && styles.tabBtnActive]}
+                onPress={() => setActiveSection("proprietaire")}
+              >
+                <Text style={styles.tabBtnText}>Proprietaire</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.tabBtn, activeSection === "assurance" && styles.tabBtnActive]}
+                onPress={() => setActiveSection("assurance")}
               >
                 <Text style={styles.tabBtnText}>Assurance</Text>
               </Pressable>
               <Pressable
-                style={[styles.tabBtn, activeSection === "tickets" && styles.tabBtnActive]}
-                onPress={() => setActiveSection("tickets")}
+                style={[styles.tabBtn, activeSection === "immatriculation" && styles.tabBtnActive]}
+                onPress={() => setActiveSection("immatriculation")}
               >
-                <Text style={styles.tabBtnText}>Tickets</Text>
+                <Text style={styles.tabBtnText}>Immatriculation</Text>
               </Pressable>
             </View>
           ) : null}
 
-          {vehicleSection && activeSection === "vehicle" ? (
+          {documentsResult && activeSection === "vehicule" ? (
             <View style={styles.resultBox}>
               <Text style={styles.resultTitle}>Vehicule</Text>
-              <Text style={styles.resultTitle}>Proprietaire</Text>
-              <Text style={styles.value}>Marque: {vehicleSection.vehicule?.brand || "-"}</Text>
-              <Text style={styles.value}>Modele: {vehicleSection.vehicule?.model || "-"}</Text>
-              <Text style={styles.value}>Plaque: {vehicleSection.vehicule?.plate_number || "-"}</Text>
-              <Text style={styles.value}>Couleur: {vehicleSection.vehicule?.color || "-"}</Text>
-              <Text style={styles.value}>Annee: {vehicleSection.vehicule?.year || "-"}</Text>
-              <Text style={styles.value}>NIF: {vehicleSection.proprietaire?.nif || "-"}</Text>
-              <Text style={styles.value}>Nom: {vehicleSection.proprietaire?.nom || "-"}</Text>
-              <Text style={styles.value}>Prenom: {vehicleSection.proprietaire?.prenom || "-"}</Text>
-              <Text style={styles.value}>Adresse: {vehicleSection.proprietaire?.adresse || "-"}</Text>
-              <Text style={styles.value}>Telephone: {vehicleSection.proprietaire?.phone || "-"}</Text>
-              <Text style={styles.value}>Email: {vehicleSection.proprietaire?.email || "-"}</Text>
+              <Text style={styles.value}>Plaque: {documentsResult.vehicule?.plaque || "-"}</Text>
+              <Text style={styles.value}>Marque: {documentsResult.vehicule?.marque || "-"}</Text>
+              <Text style={styles.value}>Modele: {documentsResult.vehicule?.modele || "-"}</Text>
+              <Text style={styles.value}>Couleur: {documentsResult.vehicule?.couleur || "-"}</Text>
+              <Text style={styles.value}>Annee: {documentsResult.vehicule?.annee || "-"}</Text>
             </View>
           ) : null}
 
-          {insuranceSection && activeSection === "insurance" ? (
+          {documentsResult && activeSection === "proprietaire" ? (
+            <View style={styles.resultBox}>
+              <Text style={styles.resultTitle}>Proprietaire</Text>
+              <Text style={styles.value}>NIF: {documentsResult.proprietaire?.nif || "-"}</Text>
+              <Text style={styles.value}>Nom: {documentsResult.proprietaire?.nom || "-"}</Text>
+              <Text style={styles.value}>Prenom: {documentsResult.proprietaire?.prenom || "-"}</Text>
+              <Text style={styles.value}>Adresse: {documentsResult.proprietaire?.adresse || "-"}</Text>
+              <Text style={styles.value}>Telephone: {documentsResult.proprietaire?.phone || "-"}</Text>
+              <Text style={styles.value}>Email: {documentsResult.proprietaire?.email || "-"}</Text>
+            </View>
+          ) : null}
+
+          {documentsResult && activeSection === "assurance" ? (
             <View style={styles.resultBox}>
               <Text style={styles.resultTitle}>Assurance</Text>
+              <Text style={styles.value}>Numero police: {documentsResult.assurance?.numero_police || "-"}</Text>
+              <Text style={styles.value}>Compagnie: {documentsResult.assurance?.compagnie || "-"}</Text>
+              <Text style={styles.value}>Date emission: {formatDate(documentsResult.assurance?.date_emission)}</Text>
               <Text style={styles.value}>
-                Police: {String(insuranceSection.assurance_en_cours?.policy_number ?? "-")}
+                Date expiration: {formatDate(documentsResult.assurance?.date_expiration)}
               </Text>
               <Text style={styles.value}>
-                Compagnie: {String(insuranceSection.assurance_en_cours?.company_name ?? "-")}
+                Active: {documentsResult.assurance?.est_active === true ? "Oui" : documentsResult.assurance?.est_active === false ? "Non" : "-"}
               </Text>
-              <Text style={styles.value}>
-                Emise le: {formatDate(insuranceSection.assurance_en_cours?.issued_date)}
-              </Text>
-              <Text style={styles.value}>
-                Expire le: {formatDate(insuranceSection.assurance_en_cours?.expiration_date)}
-              </Text>
-              <Text style={styles.value}>
-                Immatriculation: {String(insuranceSection.registration?.registration_code ?? "-")}
-              </Text>
-              {insuranceSection.alerts?.map((alert, idx) => (
-                <Text key={`${alert.code || "assurance-alert"}-${idx}`} style={styles.warningText}>
-                  Alerte: {alert.message || "Anomalie assurance detectee."}
-                </Text>
-              ))}
             </View>
           ) : null}
 
-          {ticketsSection && activeSection === "tickets" ? (
+          {documentsResult && activeSection === "immatriculation" ? (
             <View style={styles.resultBox}>
-              <Text style={styles.resultTitle}>Dernier ticket</Text>
-              {ticketsSection.latest_unpaid && ticketsSection.latest_unpaid.length > 0 ? (
-                <>
-                  <Text style={styles.value}>
-                    Numero: {String(ticketsSection.latest_unpaid[0]?.ticket_number ?? "-")}
-                  </Text>
-                  <Text style={styles.value}>
-                    Statut: {String(ticketsSection.latest_unpaid[0]?.status ?? "-")}
-                  </Text>
-                  <Text style={styles.value}>
-                    Date: {formatTicketDate(ticketsSection.latest_unpaid[0]?.timestamp)}
-                  </Text>
-                  <Text style={styles.value}>
-                    Heure: {formatTicketTime(ticketsSection.latest_unpaid[0]?.timestamp)}
-                  </Text>
-                  <Text style={styles.value}>
-                    Lieu: {String(ticketsSection.latest_unpaid[0]?.location ?? "-")}
-                  </Text>
-                  <Text style={styles.value}>
-                    Motif: {String(ticketsSection.latest_unpaid[0]?.motif ?? "-")}
-                  </Text>
-                  <Text style={styles.value}>
-                    Montant: {String(ticketsSection.latest_unpaid[0]?.montant ?? "-")}
-                  </Text>
-                </>
-              ) : (
-                <Text style={styles.value}>Aucun ticket impaye en cours.</Text>
-              )}
-
-              {ticketsSection.alerts?.map((alert, idx) => (
-                <Text key={`${alert.code || "ticket-alert"}-${idx}`} style={styles.warningText}>
-                  Alerte: {alert.message || "Anomalie tickets detectee."}
-                </Text>
-              ))}
-
-              <Pressable
-                style={styles.docItem}
-                onPress={() => setShowAllTickets((prev) => !prev)}
-              >
-                <Text style={styles.docItemNumber}>
-                  {showAllTickets ? "Masquer tous les tickets" : "Afficher tous les tickets"}
-                </Text>
-              </Pressable>
-
-              {showAllTickets &&
-                (ticketsSection.all_tickets?.length ? (
-                  ticketsSection.all_tickets.map((ticket, idx) => (
-                    <View key={`ticket-${idx}`} style={styles.detailRow}>
-                      <Text style={styles.value}>
-                        #{String(ticket.ticket_number ?? "-")} | {String(ticket.status ?? "-")}
-                      </Text>
-                      <Text style={styles.value}>Date: {formatTicketDate(ticket.timestamp)}</Text>
-                      <Text style={styles.value}>Heure: {formatTicketTime(ticket.timestamp)}</Text>
-                      <Text style={styles.value}>Motif: {String(ticket.motif ?? "-")}</Text>
-                      <Text style={styles.value}>Montant: {String(ticket.montant ?? "-")}</Text>
-                    </View>
-                  ))
-                ) : (
-                  <Text style={styles.value}>Aucun ticket lie a cette immatriculation.</Text>
-                ))}
+              <Text style={styles.resultTitle}>Immatriculation</Text>
+              <Text style={styles.value}>
+                Numero: {documentsResult.immatriculation?.numero_immatriculation || "-"}
+              </Text>
+              <Text style={styles.value}>Type: {documentsResult.immatriculation?.type || "-"}</Text>
+              <Text style={styles.value}>
+                Date emission: {formatDate(documentsResult.immatriculation?.date_emission)}
+              </Text>
+              <Text style={styles.value}>
+                Date expiration: {formatDate(documentsResult.immatriculation?.date_expiration)}
+              </Text>
             </View>
           ) : null}
         </View>

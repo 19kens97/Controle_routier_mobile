@@ -13,7 +13,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import Screen from "../../components/screen";
-import { AppTheme, theme as themeSingleton } from "../../constants/theme";
+import { AppTheme } from "../../constants/theme";
 import { useAppTheme } from "../../src/providers/theme.provider";
 import { getUserProfile, updateUserProfile, UserProfile } from "../../src/api/users.api";
 
@@ -227,6 +227,8 @@ export default function ProfileScreen() {
             onChange={(v) => setForm((s) => ({ ...s, first_name: v }))}
             editable={isEditing}
             placeholder="Votre prénom"
+            styles={styles}
+            theme={theme}
           />
           <Field
             label="Nom"
@@ -235,6 +237,7 @@ export default function ProfileScreen() {
             editable={isEditing}
             placeholder="Votre nom"
             styles={styles}
+            theme={theme}
           />
           <Field
             label="Email"
@@ -244,6 +247,8 @@ export default function ProfileScreen() {
             placeholder="email@exemple.com"
             keyboardType="email-address"
             autoCapitalize="none"
+            styles={styles}
+            theme={theme}
           />
 
           {isEditing ? (
@@ -325,6 +330,7 @@ function Field({
   keyboardType,
   autoCapitalize,
   styles,
+  theme,
 }: {
   label: string;
   value: string;
@@ -333,22 +339,22 @@ function Field({
   placeholder?: string;
   keyboardType?: TextInputProps["keyboardType"];
   autoCapitalize?: TextInputProps["autoCapitalize"];
-  styles?: ReturnType<typeof createStyles>;
+  styles: ReturnType<typeof createStyles>;
+  theme: AppTheme;
 }) {
-  const resolvedStyles = styles ?? createStyles(themeSingleton);
   return (
-    <View style={{ marginTop: themeSingleton.spacing.md }}>
-      <Text style={resolvedStyles.fieldLabel}>{label}</Text>
+    <View style={{ marginTop: theme.spacing.md }}>
+      <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
         value={value}
         onChangeText={onChange}
         editable={editable}
         placeholder={placeholder}
-        placeholderTextColor="rgba(255,255,255,0.35)"
+        placeholderTextColor={theme.colors.textMuted}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
         style={[
-          resolvedStyles.input,
+          styles.input,
           !editable && { opacity: 0.8 },
         ]}
       />

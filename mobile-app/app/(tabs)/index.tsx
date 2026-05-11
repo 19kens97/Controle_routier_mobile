@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+﻿import { Ionicons } from "@expo/vector-icons";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
@@ -326,7 +326,9 @@ function StatBox({
 }) {
   return (
     <View style={styles.statBox}>
-      <Ionicons name={icon} size={18} color="rgba(255,255,255,0.85)" />
+      <View style={styles.actionIcon}>
+        <Ionicons name={icon} size={20} color={theme.colors.accent} />
+      </View>
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>

@@ -50,7 +50,7 @@ const DOCS: {
   {
     type: "DRIVER_LICENSE",
     label: "Permis",
-    placeholder: "Ex: DL-2025-000123",
+    placeholder: "Ex: AB-12345-CD",
   },
   {
     type: "VEHICLE_CARD",
@@ -863,7 +863,7 @@ function createStyles(theme: AppTheme) {
       borderWidth: 1,
       borderColor: "rgba(220,38,38,0.55)",
     },
-    alertCriticalText: { color: theme.colors.danger, fontWeight: "900", fontSize: theme.font.small },
+    alertCriticalText: { color: theme.colors.link, fontWeight: "900", fontSize: theme.font.small },
     ticketListWrap: { gap: 8 },
     ticketItem: {
       borderWidth: 1,
