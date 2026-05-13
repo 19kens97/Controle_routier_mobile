@@ -21,7 +21,6 @@ import {
   StatsMetric,
   fetchDashboardStats,
 } from "../../src/api/stats.api";
-import { mockDashboardStats } from "../../src/mocks/stats.mock";
 import { useAppTheme } from "../../src/providers/theme.provider";
 import { createPageStyles } from "../../src/ui/page-styles";
 
@@ -37,7 +36,7 @@ export default function StatsScreen() {
   const pageStyles = useMemo(() => createPageStyles(theme), [theme]);
   const styles = useMemo(() => createStyles(theme), [theme]);
 
-  const [dashboard, setDashboard] = useState<DashboardStats>(mockDashboardStats);
+  const [dashboard, setDashboard] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +57,7 @@ export default function StatsScreen() {
       setDashboard(withLiveSource(response));
       setError(null);
     } catch (err: any) {
-      setDashboard(mockDashboardStats);
+      setDashboard(null);
       setError(
         err?.response?.data?.message ||
           err?.message ||
@@ -70,9 +69,9 @@ export default function StatsScreen() {
     }
   }
 
-  const sourceLabel = dashboard.source === "live" ? "Source live" : "Mode demonstration";
-  const generatedAtLabel = formatGeneratedAt(dashboard.generatedAt);
-  const safeSubheadline = getSafeSubheadline(dashboard.subheadline);
+  const sourceLabel = dashboard?.source === "live" ? "Source live" : "Source indisponible";
+  const generatedAtLabel = dashboard ? formatGeneratedAt(dashboard.generatedAt) : "indisponible";
+  const safeSubheadline = dashboard ? getSafeSubheadline(dashboard.subheadline) : "";
 
   return (
     <Screen>
@@ -100,21 +99,23 @@ export default function StatsScreen() {
             <View
               style={[
                 styles.sourcePill,
-                dashboard.source === "live" ? styles.sourcePillLive : styles.sourcePillMock,
+                dashboard?.source === "live" ? styles.sourcePillLive : styles.sourcePillMock,
               ]}
             >
               <View
                 style={[
                   styles.sourceDot,
-                  { backgroundColor: dashboard.source === "live" ? theme.colors.success : theme.colors.accent },
+                  { backgroundColor: dashboard?.source === "live" ? theme.colors.success : theme.colors.accent },
                 ]}
               />
               <Text style={styles.sourcePillText}>{sourceLabel}</Text>
             </View>
           </View>
 
-          <Text style={styles.heroHeadline}>{dashboard.headline}</Text>
-          <Text style={styles.heroSubheadline}>{safeSubheadline}</Text>
+          <Text style={styles.heroHeadline}>{dashboard?.headline || "Statistiques indisponibles"}</Text>
+          <Text style={styles.heroSubheadline}>
+            {safeSubheadline || "Les donnees ne sont pas disponibles pour le moment."}
+          </Text>
 
           <View style={styles.heroFooter}>
             <View style={styles.heroMeta}>
@@ -140,61 +141,65 @@ export default function StatsScreen() {
           <View style={styles.errorBanner}>
             <Ionicons name="warning-outline" size={18} color={theme.colors.danger} />
             <Text style={styles.errorText}>
-              {error} {dashboard.source === "mock" ? "Affichage du jeu de donnees local." : ""}
+              {error}
             </Text>
           </View>
         ) : null}
 
-        <View style={styles.metricsGrid}>
-          {dashboard.metrics.map((metric) => (
-            <MetricCard key={metric.id} metric={metric} theme={theme} styles={styles} />
-          ))}
-        </View>
-
-        <View style={pageStyles.card}>
-          <View style={pageStyles.cardHeader}>
-            <Text style={pageStyles.cardTitle}>{dashboard.activity.title}</Text>
-            <Ionicons name="stats-chart-outline" size={20} color={theme.colors.text} />
-          </View>
-          <Text style={styles.sectionHint}>Vision glissante sur 7 jours pour suivre le volume terrain.</Text>
-          <ActivityChart points={dashboard.activity.points} theme={theme} styles={styles} />
-        </View>
-
-        <View style={styles.splitRow}>
-          <View style={[pageStyles.card, styles.halfCard]}>
-            <View style={pageStyles.cardHeader}>
-              <Text style={pageStyles.cardTitle}>{dashboard.infractions.title}</Text>
-              <Ionicons name="pie-chart-outline" size={20} color={theme.colors.text} />
+        {dashboard ? (
+          <>
+            <View style={styles.metricsGrid}>
+              {dashboard.metrics.map((metric) => (
+                <MetricCard key={metric.id} metric={metric} theme={theme} styles={styles} />
+              ))}
             </View>
-            <DistributionList items={dashboard.infractions.items} theme={theme} styles={styles} />
-          </View>
 
-          <View style={[pageStyles.card, styles.halfCard]}>
-            <View style={pageStyles.cardHeader}>
-              <Text style={pageStyles.cardTitle}>{dashboard.hotspots.title}</Text>
-              <Ionicons name="location-outline" size={20} color={theme.colors.text} />
+            <View style={pageStyles.card}>
+              <View style={pageStyles.cardHeader}>
+                <Text style={pageStyles.cardTitle}>{dashboard.activity.title}</Text>
+                <Ionicons name="stats-chart-outline" size={20} color={theme.colors.text} />
+              </View>
+              <Text style={styles.sectionHint}>Vision glissante sur 7 jours pour suivre le volume terrain.</Text>
+              <ActivityChart points={dashboard.activity.points} theme={theme} styles={styles} />
             </View>
-            <RankingList items={dashboard.hotspots.items} styles={styles} />
-          </View>
-        </View>
 
-        <View style={styles.splitRow}>
-          <View style={[pageStyles.card, styles.halfCard]}>
-            <View style={pageStyles.cardHeader}>
-              <Text style={pageStyles.cardTitle}>Activite recente</Text>
-              <Ionicons name="time-outline" size={20} color={theme.colors.text} />
-            </View>
-            <RecentActivityList items={dashboard.recentActivity} theme={theme} styles={styles} />
-          </View>
+            <View style={styles.splitRow}>
+              <View style={[pageStyles.card, styles.halfCard]}>
+                <View style={pageStyles.cardHeader}>
+                  <Text style={pageStyles.cardTitle}>{dashboard.infractions.title}</Text>
+                  <Ionicons name="pie-chart-outline" size={20} color={theme.colors.text} />
+                </View>
+                <DistributionList items={dashboard.infractions.items} theme={theme} styles={styles} />
+              </View>
 
-          <View style={[pageStyles.card, styles.halfCard]}>
-            <View style={pageStyles.cardHeader}>
-              <Text style={pageStyles.cardTitle}>Alertes et signaux</Text>
-              <Ionicons name="flash-outline" size={20} color={theme.colors.text} />
+              <View style={[pageStyles.card, styles.halfCard]}>
+                <View style={pageStyles.cardHeader}>
+                  <Text style={pageStyles.cardTitle}>{dashboard.hotspots.title}</Text>
+                  <Ionicons name="location-outline" size={20} color={theme.colors.text} />
+                </View>
+                <RankingList items={dashboard.hotspots.items} styles={styles} />
+              </View>
             </View>
-            <AlertsList items={dashboard.alerts} styles={styles} />
-          </View>
-        </View>
+
+            <View style={styles.splitRow}>
+              <View style={[pageStyles.card, styles.halfCard]}>
+                <View style={pageStyles.cardHeader}>
+                  <Text style={pageStyles.cardTitle}>Activite recente</Text>
+                  <Ionicons name="time-outline" size={20} color={theme.colors.text} />
+                </View>
+                <RecentActivityList items={dashboard.recentActivity} theme={theme} styles={styles} />
+              </View>
+
+              <View style={[pageStyles.card, styles.halfCard]}>
+                <View style={pageStyles.cardHeader}>
+                  <Text style={pageStyles.cardTitle}>Alertes et signaux</Text>
+                  <Ionicons name="flash-outline" size={20} color={theme.colors.text} />
+                </View>
+                <AlertsList items={dashboard.alerts} styles={styles} />
+              </View>
+            </View>
+          </>
+        ) : null}
       </ScrollView>
     </Screen>
   );

@@ -242,13 +242,11 @@ export default function TicketCreateScreen() {
                 <ActivityIndicator color={theme.colors.accent} />
                 <Text style={styles.infoText}>Recuperation de la position...</Text>
               </View>
-            ) : (
+            ) : latitude === undefined || longitude === undefined ? (
               <Text style={styles.infoText}>
-                {latitude !== undefined && longitude !== undefined
-                  ? "Position GPS prete pour la verbalisation."
-                  : "Position GPS non disponible. Le ticket sera cree sans coordonnees."}
+                Position GPS non disponible. Le ticket sera cree sans coordonnees.
               </Text>
-            )}
+            ) : null}
 
             {!isScanFlow ? (
               <>
@@ -264,7 +262,7 @@ export default function TicketCreateScreen() {
               </>
             ) : null}
 
-            <Text style={styles.label}>Numero de permis (optionnel)</Text>
+            <Text style={styles.label}>Numero de permis</Text>
             <TextInput
               value={licenseNumber}
               onChangeText={(value) => setLicenseNumber(value.toUpperCase())}
@@ -302,7 +300,14 @@ export default function TicketCreateScreen() {
                       ? `${selectedInfraction.code} - ${selectedInfraction.description}`
                       : "Selectionner une infraction"}
                   </Text>
-                  <Text style={styles.infractionDropdownChevron}>{isInfractionDropdownOpen ? "^" : "v"}</Text>
+                  <View
+                    style={[
+                      styles.infractionDropdownChevron,
+                      isInfractionDropdownOpen
+                        ? styles.infractionDropdownChevronOpen
+                        : styles.infractionDropdownChevronClosed,
+                    ]}
+                  />
                 </Pressable>
 
                 {isInfractionDropdownOpen ? (
@@ -439,9 +444,25 @@ function createStyles(theme: AppTheme) {
       flex: 1,
     },
     infractionDropdownChevron: {
-      color: theme.colors.textMuted,
-      fontSize: theme.font.small,
-      fontWeight: "900",
+      width: 0,
+      height: 0,
+      borderStyle: "solid",
+    },
+    infractionDropdownChevronClosed: {
+      borderTopWidth: 6,
+      borderBottomWidth: 6,
+      borderLeftWidth: 8,
+      borderTopColor: "transparent",
+      borderBottomColor: "transparent",
+      borderLeftColor: theme.colors.textMuted,
+    },
+    infractionDropdownChevronOpen: {
+      borderLeftWidth: 6,
+      borderRightWidth: 6,
+      borderTopWidth: 8,
+      borderLeftColor: "transparent",
+      borderRightColor: "transparent",
+      borderTopColor: theme.colors.textMuted,
     },
     infractionDropdownMenu: {
       maxHeight: 220,

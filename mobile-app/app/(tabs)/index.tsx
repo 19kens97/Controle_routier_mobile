@@ -149,17 +149,15 @@ export default function HomeDashboard() {
           </View>
 
           <View style={styles.syncBadge}>
-            <Ionicons
-              name={sync.online ? "cloud-done-outline" : "cloud-offline-outline"}
-              size={16}
-              color={theme.colors.text}
+            <View
+              style={[
+                styles.statusDot,
+                { backgroundColor: sync.online ? theme.colors.link : theme.colors.border2 },
+              ]}
             />
-            <Text style={styles.syncText}>
-              {sync.online ? "En ligne" : "Hors ligne"}
-              {typeof sync.pendingCount === "number" && sync.pendingCount > 0
-                ? ` • ${sync.pendingCount} en attente`
-                : ""}
-            </Text>
+            {typeof sync.pendingCount === "number" && sync.pendingCount > 0 ? (
+              <Text style={styles.syncText}>{sync.pendingCount} en attente</Text>
+            ) : null}
           </View>
         </View>
 
@@ -395,9 +393,14 @@ function createStyles(theme: AppTheme) {
       borderColor: theme.colors.border2,
     },
     syncText: {
-      color: "rgba(255,255,255,0.82)",
+      color: theme.colors.textMuted,
       fontSize: theme.font.small,
       fontWeight: "800",
+    },
+    statusDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 999,
     },
     infoRow: {
       flexDirection: "row",

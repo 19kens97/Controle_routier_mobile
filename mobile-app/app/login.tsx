@@ -96,12 +96,12 @@ export default function Login() {
             <Text style={pageStyles.cardTitle}>Se connecter</Text>
 
             <View style={styles.inputWrap}>
-              <Ionicons name="person-outline" size={18} color="rgba(255,255,255,0.7)" />
+              <Ionicons name="person-outline" size={18} color={theme.colors.accent} />
               <TextInput
                 value={username}
                 onChangeText={setUsername}
-                placeholder="Nom d’utilisateur"
-                placeholderTextColor="rgba(255,255,255,0.35)"
+                placeholder="Nom d'utilisateur"
+                placeholderTextColor={theme.colors.textPlaceholder}
                 autoCapitalize="none"
                 style={styles.input}
                 returnKeyType="next"
@@ -109,12 +109,12 @@ export default function Login() {
             </View>
 
             <View style={styles.inputWrap}>
-              <Ionicons name="lock-closed-outline" size={18} color="rgba(255,255,255,0.7)" />
+              <Ionicons name="lock-closed-outline" size={18} color={theme.colors.accent} />
               <TextInput
                 value={password}
                 onChangeText={setPassword}
                 placeholder="Mot de passe"
-                placeholderTextColor="rgba(255,255,255,0.35)"
+                placeholderTextColor={theme.colors.textPlaceholder}
                 secureTextEntry={hidePass}
                 style={styles.input}
                 returnKeyType="done"
@@ -124,7 +124,7 @@ export default function Login() {
                 <Ionicons
                   name={hidePass ? "eye-outline" : "eye-off-outline"}
                   size={18}
-                  color="rgba(255,255,255,0.7)"
+                  color={theme.colors.accent}
                 />
               </Pressable>
             </View>
@@ -186,3 +186,4 @@ function createStyles(theme: AppTheme) {
   buttonDisabled: { opacity: 0.45 },
   });
 }
+

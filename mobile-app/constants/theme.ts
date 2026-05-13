@@ -58,6 +58,7 @@ type ThemeColors = {
   text: string;
   textMuted: string;
   textDim: string;
+  textPlaceholder: string;
   accent: string;
   accentSoft: string;
   accentBorder: string;
@@ -150,6 +151,7 @@ const DARK_COLORS: ThemeColors = {
   text: "#FFFFFF",
   textMuted: "rgba(255,255,255,0.65)",
   textDim: "rgba(255,255,255,0.60)",
+  textPlaceholder: "rgba(255,255,255,0.42)",
   accent: "rgba(255,215,0,0.95)",
   // accent: "rgba(48, 133, 107, 0.93)",
   link: "rgba(255,215,0,0.85)",
@@ -178,6 +180,7 @@ const LIGHT_COLORS: ThemeColors = {
   text: LIGHT_TEXT,
   textMuted: LIGHT_TEXT_MUTED,
   textDim: LIGHT_TEXT_DIM,
+  textPlaceholder: "rgba(43,22,11,0.42)",
   accent: LIGHT_ACCENT,
   link: "#E85D04",
 
@@ -205,6 +208,7 @@ const SYSTEM_COLORS: ThemeColors = {
   text: SYSTEM_TEXT,
   textMuted: SYSTEM_TEXT_MUTED,
   textDim: SYSTEM_TEXT_DIM,
+  textPlaceholder: "rgba(16,32,63,0.42)",
   accent: SYSTEM_ACCENT,
   link: "#4765ca",
 

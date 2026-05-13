@@ -3,7 +3,6 @@ import { render, waitFor } from "@testing-library/react-native";
 
 import StatsScreen from "../app/(tabs)/stats";
 import { fetchDashboardStats } from "../src/api/stats.api";
-import { mockDashboardStats } from "../src/mocks/stats.mock";
 
 jest.mock("expo-linear-gradient", () => ({
   LinearGradient: ({ children }: { children: React.ReactNode }) => children,
@@ -108,15 +107,15 @@ describe("Stats screen", () => {
     });
   });
 
-  it("falls back to mock dashboard data when the API fails", async () => {
+  it("shows an error without mock data when the API fails", async () => {
     (fetchDashboardStats as jest.Mock).mockRejectedValueOnce({
       response: { data: { message: "Erreur backend stats" } },
     });
 
     const { findByText, getByText } = render(<StatsScreen />);
 
-    expect(await findByText("Mode demonstration")).toBeTruthy();
-    expect(getByText("Erreur backend stats Affichage du jeu de donnees local.")).toBeTruthy();
-    expect(getByText(mockDashboardStats.headline)).toBeTruthy();
+    expect(await findByText("Source indisponible")).toBeTruthy();
+    expect(getByText("Erreur backend stats")).toBeTruthy();
+    expect(getByText("Statistiques indisponibles")).toBeTruthy();
   });
 });

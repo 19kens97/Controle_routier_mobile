@@ -303,7 +303,7 @@ export default function DocumentsScreen() {
   const meta = useMemo(() => DOCS.find((d) => d.type === docType)!, [docType]);
 
   async function onSearch(q?: string) {
-    const value = (q ?? query).trim();
+    const value = (q ?? query).trim().toUpperCase();
     if (!value) {
       setErrorMsg("Veuillez saisir un numero ou code.");
       setResult(null);
@@ -446,10 +446,10 @@ export default function DocumentsScreen() {
 
           <TextInput
             value={query}
-            onChangeText={(v) => setQuery(isDossierMode ? v.toUpperCase() : v)}
+            onChangeText={(v) => setQuery(v.toUpperCase())}
             placeholder={meta.placeholder}
             placeholderTextColor={theme.colors.textDim}
-            autoCapitalize={isDossierMode ? "characters" : "none"}
+            autoCapitalize="characters"
             style={styles.input}
             returnKeyType="search"
             onSubmitEditing={() => onSearch()}
